@@ -18,7 +18,7 @@ RATE = int(os.environ.get("RATE", "30"))      # LLM requests / minute / IP
 AUTH_RATE = 5                                 # signup+login / minute / IP
 DB_PATH = os.environ.get("DB", os.path.join(HERE, "banter.db"))
 MAXLEN = 400
-LLM_FLAGS = ["agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed", "hesitant"]
+LLM_FLAGS = ["generic", "agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed", "hesitant"]
 CODE_FLAGS = ["borrowed", "repetitive", "stale", "off-technique", "rule-broken"]   # set by code, never by the model
 FLAGS = LLM_FLAGS + CODE_FLAGS
 NEED = 3  # passes per stage before its rally
@@ -75,8 +75,9 @@ Principles (from research on teasing, charisma and conversation):
 - Humor signals interest when it is about THEM (their choices, their vibe), not about the words; a pun alone shows cleverness, not interest -> "pun only".
 - Questions: dry interview questions are bad ("interviewing"), but a PLAYFUL follow-up that proves you read their text and has a tease built in can Pass (e.g. "Is it a negotiation or a hostile takeover?").
 - One idea per text. Two stacked ideas or a long sentence -> "clunky".
+- Specific beats generic: a Pass must use a concrete detail of THEIR message and hand them something fun to answer. A short stock line that could reply to almost any text ("keep me out of it", "make sure you have an alibi", "that's wild") is Weak 50-65 -> "generic".
 Name the principle in the diagnosis when it explains the miss (e.g. "you turned away from their bit").
-Calibration: be strict but fair. Any technique from the library below that stays low-pressure and gives the recipient something to bounce off is a PASS (score 75-95). Do not mark a Pass down for being a mild stereotype if it is playful and warm. Dead End = 0-30. Use the FULL Weak band 31-74 by how close the reply came: about 35 = barely a joke or mostly off-target, about 50 = right instinct but flat or hedged, about 65-70 = almost there, one fix away. Do not default to 45.
+Calibration: be strict but fair. Use the Pass band honestly: 75-79 = solid, 80-87 = sharp and specific, 88-95 = genuinely funny, would get a laugh. Any technique from the library below that stays low-pressure and gives the recipient something to bounce off is a PASS (score 75-95). Do not mark a Pass down for being a mild stereotype if it is playful and warm. Dead End = 0-30. Use the FULL Weak band 31-74 by how close the reply came: about 35 = barely a joke or mostly off-target, about 50 = right instinct but flat or hedged, about 65-70 = almost there, one fix away. Do not default to 45.
 Technique library (id: how):
 %s
 Rewrites must be fresh lines written for this exact text, not stock phrases.
@@ -94,6 +95,8 @@ THEM: "haha yeah" / USER: "That 'haha yeah' had real 'watching something better 
 THEM: "I'm weirdly competitive at board games" / USER: "Cute. I'll still destroy you at Monopoly though" -> Pass 85, push_pull.
 THEM: "craving a really good taco and nobody knows where to go" / USER: "There's a place on 5th that will ruin all other tacos for you. Thursday after work?" -> Pass 88, invite.
 THEM: same / USER: "maybe we could get tacos sometime if you want, no pressure haha" -> Weak 45, invite (hesitant, over-qualified).
+THEM: "probably contemplating my next bad decision" / USER: "Keep me out of it." -> Weak 55, role_reversal (generic: could answer almost anything, gives them nothing to play with).
+THEM: same / USER: "Let me guess, it involves a 2am online shopping cart and zero regrets" -> Pass 84, cold_read (specific, invites them to confess).
 THEM: "negotiating with my cat for control of my laptop" / USER: "You should just buy a new laptop, you aren't gonna win this one" -> Weak 35, none (turns away from their bit into advice).
 THEM: same / USER: "Is it a negotiation or a hostile takeover? Be honest" -> Pass 82, accusation (playful follow-up that stays in their premise).
 THEM: "deep dive of old sitcoms and a massive bowl of popcorn" / USER: "I dont know, im not prepared for that level of cozy" -> Weak 50, none (right instinct, but hedged and about you).
@@ -143,7 +146,7 @@ PRINCIPLES = {
     "one_idea": {"name": "One idea, short", "source": "Coach rule from your own stats",
                  "idea": "One frame per text, stated briefly. Long or double-idea texts get skimmed."},
 }
-FLAG_PRINCIPLE = {"clunky": "one_idea", "try-hard": "mark_tease", "too literal": "yes_and", "advice": "yes_and", "agreeing": "yes_and",
+FLAG_PRINCIPLE = {"generic": "about_them", "clunky": "one_idea", "try-hard": "mark_tease", "too literal": "yes_and", "advice": "yes_and", "agreeing": "yes_and",
                   "pun only": "about_them", "hesitant": "no_hedges", "bailed": "no_hedges", "interviewing": "playful_followup",
                   "thirsty": "push_pull", "repetitive": "about_them", "stale": "about_them", "borrowed": "no_hedges", "off-technique": "about_them"}
 
@@ -281,7 +284,7 @@ def judge_llm(d, recent=None):
         t = TECH[challenge]
         prompt += "\nTECHNIQUE CHALLENGE: the user must use %s (%s). If the reply does not clearly use it, the verdict is at most Weak and the diagnosis must say so." % (t["name"], t["how"])
     if d.get("_rule"):
-        prompt += "\nDRILL RULE the user is practising: %s (principle: %s). Judge the reply normally, and say in the diagnosis whether it applied the principle." % (
+        prompt += "\nDRILL: the user is practising this rule: %s (principle: %s). The rule is a MINIMUM requirement and earns no credit by itself: grade the reply exactly as you would with no drill (would it actually land with this person?). Only mention the rule in the diagnosis if it explains a miss." % (
             d["_rule"]["text"], d.get("_principle", ""))
     j = json.loads(llm([{"role": "system", "content": COACH}, {"role": "user", "content": prompt}], SCHEMA))
     j["score"] = max(0, min(100, int(j["score"])))
@@ -303,6 +306,8 @@ def judge_llm(d, recent=None):
         j["diagnosis"] += " Also: that phrasing is a worn-out template. It works once, then it reads like a script."
     if challenge and j["technique"] != challenge:
         cap(j, "off-technique", "The challenge was %s, and this isn't it." % TECH[challenge]["name"])
+    if j["verdict"] == "Pass" and (d.get("_rule") or d.get("rally")):
+        second_look(j, d, reply)
     rule = d.get("_rule")
     if rule:
         broken = rule_broken(reply, rule)
@@ -311,6 +316,26 @@ def judge_llm(d, recent=None):
         if broken:
             cap(j, "rule-broken", "Drill rule broken (%s)." % broken)
     return j
+
+CRITIC = """You are a tough second reviewer for a banter-training game. Another coach passed this text reply. Decide if it truly deserves a Pass.
+A Pass must: (1) use a concrete detail or the premise of THEIR message, not a stock line that could answer almost anything; (2) give them something fun and easy to reply to; (3) read as playful and confident, not flat or confusing. Short is fine if it is sharp.
+Be honest, not harsh: clever, specific lines keep the Pass.
+Respond ONLY with JSON {"keep_pass": true|false, "reason": "one sentence to the player"}."""
+CSCHEMA = {"type": "object", "additionalProperties": False, "required": ["keep_pass", "reason"],
+           "properties": {"keep_pass": {"type": "boolean"}, "reason": {"type": "string"}}}
+
+def second_look(j, d, reply):
+    """Stricter re-check of Passes where leniency matters (drills, rallies)."""
+    them = next((clean(m.get("t", "")) for m in reversed(d.get("thread", [])) if isinstance(m, dict) and m.get("who") == "them"), "")
+    try:
+        c = json.loads(llm([{"role": "system", "content": CRITIC},
+                            {"role": "user", "content": 'THEM: "%s"\nPLAYER: "%s"' % (them, reply)}], CSCHEMA, 0.1, 200))
+    except Exception:
+        return
+    if not c.get("keep_pass"):
+        j.update(verdict="Weak", score=min(j["score"], 65))
+        j["diagnosis"] = "Second look: " + clean(c.get("reason", ""), 240) + " " + j["diagnosis"]
+        j["flags"] = sorted(set(j["flags"]) | {"generic"})
 
 def word_re(w):
     return re.compile(r"(?<![\w'])" + re.escape(w.lower()) + r"(?![\w'])")
