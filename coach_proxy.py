@@ -19,7 +19,7 @@ AUTH_RATE = 5                                 # signup+login / minute / IP
 DB_PATH = os.environ.get("DB", os.path.join(HERE, "banter.db"))
 MAXLEN = 400
 LLM_FLAGS = ["agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed", "hesitant"]
-CODE_FLAGS = ["borrowed", "repetitive", "stale", "off-technique"]   # set by code, never by the model
+CODE_FLAGS = ["borrowed", "repetitive", "stale", "off-technique", "rule-broken"]   # set by code, never by the model
 FLAGS = LLM_FLAGS + CODE_FLAGS
 NEED = 3  # passes per stage before its rally
 
@@ -68,7 +68,15 @@ COACH = """You are a blunt, uncompromising Flirting & Banter Coach training a us
 Flirting is a dial, not a switch: low-pressure playful tension, teasing, exaggeration, mock judgment, role reversal, misdirection, co-conspirator framing. Never pickup lines, forced jokes, premature heavy compliments, asking for photos, or inviting yourself over (Dead End: thirsty, stranger-danger). Always respect the other person's comfort and consent; a good line is one the recipient would enjoy.
 Verdicts: "Pass" (sharp, calibrated, gives them something to bounce off), "Weak" (right instinct, flat or clunky or hedged), "Dead End" (agrees, interviews, advises, bails, thirsty, or kills the tension).
 Stage goals: 1 Pivot = stop agreeing/advising/interviewing, tease or exaggerate. 2 Frame = create 'us' energy with hypothetical scenarios, playful compatibility tests, specific vibe-based compliments. 3 Close = turn banter into a confident, low-pressure invitation to meet, not hesitant or over-eager.
-Calibration: be strict but fair. Any technique from the library below that stays low-pressure and gives the recipient something to bounce off is a PASS (score 75-95). Do not mark a Pass down for being a mild stereotype if it is playful and warm. Weak = 35-60, Dead End = 0-30. Do not hedge to the middle.
+Principles (from research on teasing, charisma and conversation):
+- A tease needs a play signal (exaggeration, mock-drama, "lol", an obviously absurd claim) and must target something harmless; without the signal it reads as criticism -> "clunky".
+- Turn toward their bid ("yes, and"): keep THEIR premise or metaphor and add to it. Switching to logistics, solutions or advice is turning away -> "too literal" / "advice".
+- Power + warmth: commit to the line. Hedges and self-talk ("I'm not sure if", "I don't know", "maybe", talking about your own reaction instead of them) read as low power -> "hesitant" or "clunky".
+- Humor signals interest when it is about THEM (their choices, their vibe), not about the words; a pun alone shows cleverness, not interest -> "pun only".
+- Questions: dry interview questions are bad ("interviewing"), but a PLAYFUL follow-up that proves you read their text and has a tease built in can Pass (e.g. "Is it a negotiation or a hostile takeover?").
+- One idea per text. Two stacked ideas or a long sentence -> "clunky".
+Name the principle in the diagnosis when it explains the miss (e.g. "you turned away from their bit").
+Calibration: be strict but fair. Any technique from the library below that stays low-pressure and gives the recipient something to bounce off is a PASS (score 75-95). Do not mark a Pass down for being a mild stereotype if it is playful and warm. Dead End = 0-30. Use the FULL Weak band 31-74 by how close the reply came: about 35 = barely a joke or mostly off-target, about 50 = right instinct but flat or hedged, about 65-70 = almost there, one fix away. Do not default to 45.
 Technique library (id: how):
 %s
 Rewrites must be fresh lines written for this exact text, not stock phrases.
@@ -86,6 +94,12 @@ THEM: "haha yeah" / USER: "That 'haha yeah' had real 'watching something better 
 THEM: "I'm weirdly competitive at board games" / USER: "Cute. I'll still destroy you at Monopoly though" -> Pass 85, push_pull.
 THEM: "craving a really good taco and nobody knows where to go" / USER: "There's a place on 5th that will ruin all other tacos for you. Thursday after work?" -> Pass 88, invite.
 THEM: same / USER: "maybe we could get tacos sometime if you want, no pressure haha" -> Weak 45, invite (hesitant, over-qualified).
+THEM: "negotiating with my cat for control of my laptop" / USER: "You should just buy a new laptop, you aren't gonna win this one" -> Weak 35, none (turns away from their bit into advice).
+THEM: same / USER: "Is it a negotiation or a hostile takeover? Be honest" -> Pass 82, accusation (playful follow-up that stays in their premise).
+THEM: "deep dive of old sitcoms and a massive bowl of popcorn" / USER: "I dont know, im not prepared for that level of cozy" -> Weak 50, none (right instinct, but hedged and about you).
+THEM: same / USER: "Old sitcoms AND popcorn? You're one blanket away from retirement" -> Pass 80, exaggeration.
+THEM: "spent the morning looking for my missing left sock" / USER: "Uh oh better call the sock authorities" -> Weak 40, none (pun-ish, about the word not them).
+THEM: same / USER: "A missing left sock? You're giving 'loses things on purpose for the drama' energy" -> Weak 68, cold_read (almost: good angle, a bit long).
 Fields: "technique" = the library id the user's reply mainly uses, or "none". "rewrites" = up to 2 sharper alternatives (empty if Pass), each using a DIFFERENT technique from the user's and from each other, written fresh for this exact text.
 Respond ONLY with JSON: {"verdict": "Pass|Weak|Dead End", "score": 0-100, "technique": "id or none", "diagnosis": "2-3 sentences on how the recipient would actually react, naming weak words", "rewrites": [{"technique": "id", "line": "..."}], "flags": [any of %s]}""" % (
     "\n".join("- %s: %s" % (t["id"], t["how"]) for t in TECHNIQUES), ", ".join('"%s"' % f for f in LLM_FLAGS))
@@ -112,6 +126,27 @@ TEXT_TYPES = {
     "compliment": ("a light compliment to the player", '{"context": "You sent a photo of the bread you baked.", "text": "ok that bread looks better than anything from my local bakery"}'),
     "test": ("a mild playful test of the player", '{"context": "You said they have great taste in music.", "text": "you probably say that to everyone lol"}'),
 }
+# research-based drill templates ("inspired by", not proof)
+PRINCIPLES = {
+    "mark_tease": {"name": "Mark the tease", "source": "Keltner et al. 2001, 'Just Teasing' (Psychological Bulletin)",
+                   "idea": "A tease needs a play signal (exaggeration, mock-drama, obvious absurdity) and a harmless target, or it reads as criticism."},
+    "no_hedges": {"name": "No hedges", "source": "Cabane 2012, The Charisma Myth (power + warmth)",
+                  "idea": "Commit to the line. Hedging and talking about your own reaction reads as low power."},
+    "yes_and": {"name": "Yes, and their bit", "source": "Gottman's bids for connection; improv 'yes, and'",
+                "idea": "Turn toward their bid: keep their premise or metaphor and add one escalation, instead of switching to logistics or advice."},
+    "about_them": {"name": "About them, not the word", "source": "Li et al. 2009, humor as an interest indicator",
+                   "idea": "Humor signals interest when it's about the person (their choices, their vibe), not wordplay."},
+    "playful_followup": {"name": "Playful follow-up", "source": "Huang et al. 2017, 'It Doesn't Hurt to Ask' (JPSP)",
+                         "idea": "Follow-up questions that prove you listened increase liking; make it playful, not an interview."},
+    "push_pull": {"name": "Push-pull, kindly", "source": "Whitchurch, Wilson & Gilbert 2011 (Psychological Science)",
+                  "idea": "Mix warmth and a tease in one line. Keep it kind: no negging, no games about real interest."},
+    "one_idea": {"name": "One idea, short", "source": "Coach rule from your own stats",
+                 "idea": "One frame per text, stated briefly. Long or double-idea texts get skimmed."},
+}
+FLAG_PRINCIPLE = {"clunky": "one_idea", "try-hard": "mark_tease", "too literal": "yes_and", "advice": "yes_and", "agreeing": "yes_and",
+                  "pun only": "about_them", "hesitant": "no_hedges", "bailed": "no_hedges", "interviewing": "playful_followup",
+                  "thirsty": "push_pull", "repetitive": "about_them", "stale": "about_them", "borrowed": "no_hedges", "off-technique": "about_them"}
+
 TRAPS = {"interviewing": "asking a boring follow-up question", "advice": "giving practical advice", "agreeing": "just agreeing or saying same",
          "thirsty": "escalating too fast or inviting themselves over", "too literal": "answering literally", "try-hard": "a forced joke or pickup line",
          "pun only": "a weak pun", "clunky": "an overcomplicated joke", "bailed": "freezing and not replying", "hesitant": "a hesitant, over-qualified invitation"}
@@ -129,9 +164,14 @@ with dbl:
     CREATE INDEX IF NOT EXISTS att_user ON attempts(user_id, ts);
     CREATE TABLE IF NOT EXISTS progress(user_id INTEGER PRIMARY KEY, json TEXT);
     """)
-    if "technique" not in [r[1] for r in db.execute("PRAGMA table_info(attempts)")]:
+    cols = [r[1] for r in db.execute("PRAGMA table_info(attempts)")]
+    if "technique" not in cols:
         db.execute("ALTER TABLE attempts ADD COLUMN technique TEXT")
         db.execute("ALTER TABLE attempts ADD COLUMN challenge TEXT")
+    if "drill_run" not in cols:
+        db.execute("ALTER TABLE attempts ADD COLUMN drill_run TEXT")
+    db.execute("""CREATE TABLE IF NOT EXISTS drills(id TEXT PRIMARY KEY, user_id INTEGER, created REAL, spec TEXT,
+        saved INTEGER DEFAULT 0, runs INTEGER DEFAULT 0, best INTEGER DEFAULT 0, cleared INTEGER DEFAULT 0)""")
     db.commit()
 
 def q(sql, args=(), one=False, write=False):
@@ -240,6 +280,9 @@ def judge_llm(d, recent=None):
     if challenge:
         t = TECH[challenge]
         prompt += "\nTECHNIQUE CHALLENGE: the user must use %s (%s). If the reply does not clearly use it, the verdict is at most Weak and the diagnosis must say so." % (t["name"], t["how"])
+    if d.get("_rule"):
+        prompt += "\nDRILL RULE the user is practising: %s (principle: %s). Judge the reply normally, and say in the diagnosis whether it applied the principle." % (
+            d["_rule"]["text"], d.get("_principle", ""))
     j = json.loads(llm([{"role": "system", "content": COACH}, {"role": "user", "content": prompt}], SCHEMA))
     j["score"] = max(0, min(100, int(j["score"])))
     j["technique"] = j.get("technique") if j.get("technique") in TECH else "none"
@@ -260,7 +303,40 @@ def judge_llm(d, recent=None):
         j["diagnosis"] += " Also: that phrasing is a worn-out template. It works once, then it reads like a script."
     if challenge and j["technique"] != challenge:
         cap(j, "off-technique", "The challenge was %s, and this isn't it." % TECH[challenge]["name"])
+    rule = d.get("_rule")
+    if rule:
+        broken = rule_broken(reply, rule)
+        if not broken and rule.get("technique") and j["technique"] != rule["technique"]:
+            broken = "use %s" % TECH[rule["technique"]]["name"]
+        if broken:
+            cap(j, "rule-broken", "Drill rule broken (%s)." % broken)
     return j
+
+def word_re(w):
+    return re.compile(r"(?<![\w'])" + re.escape(w.lower()) + r"(?![\w'])")
+
+def rule_broken(reply, rule):
+    """Code-checkable drill rules. Returns a short reason or None."""
+    r = reply.replace("’", "'").lower()
+    n = len(reply.split())
+    if rule.get("max_words") and n > rule["max_words"]:
+        return "max %d words, you used %d" % (rule["max_words"], n)
+    for w in rule.get("ban_words") or []:
+        if word_re(w.replace("’", "'")).search(r):
+            return "no \"%s\"" % w
+    if rule.get("no_question") and "?" in reply:
+        return "no questions"
+    return None
+
+def clean_rule(r):
+    """Sanitize a rule object coming from the model or a guest client."""
+    if not isinstance(r, dict): return None
+    mw = r.get("max_words")
+    mw = int(mw) if isinstance(mw, (int, float)) and 5 <= int(mw) <= 30 else 0
+    stop = {"if", "so", "just", "really", "the", "a", "an", "i", "is", "it", "to", "and", "or", "you", "pun", "wordplay"}
+    bw = [clean(w, 20) for w in (r.get("ban_words") or []) if isinstance(w, str) and clean(w, 20) and clean(w, 20).lower() not in stop][:6]
+    t = r.get("technique") if r.get("technique") in TECH else None
+    return {"text": clean(r.get("text", ""), 200), "max_words": mw, "ban_words": bw, "no_question": bool(r.get("no_question")), "technique": t}
 
 def reply_llm(d):
     ctx = clean(d.get("context", ""), 300)
@@ -314,6 +390,125 @@ def pick_techniques(stage, used, exclude, k):
         picks.append(t); pool = [x for x in pool if x != t]
     return picks
 
+# ---------------- custom drills ----------------
+DRILL = """You design ONE short practice drill for a banter-training game, targeted at this player's worst habit.
+Player profile:
+%s
+Research-based principles you can build the drill on (pick the ONE that best fixes the habit):
+%s
+Design:
+- "title": 2-5 words, catchy.
+- "habit": the habit flag it targets.
+- "principle": the principle id.
+- "why": 2 sentences to the player. Quote 1-2 of THEIR actual weak replies word for word (from the profile) and, if they have one, contrast with one of their passes. Blunt but encouraging.
+- "rule": a constraint they must follow on every reply. "text" is the rule in one sentence. Make it checkable where possible: "max_words" (8-20, or 0 for none), "ban_words" (up to 5 words or short phrases that actually appear in THEIR weak replies and cause the habit, e.g. "should", "I'm not sure", "maybe"; never common words like "if", "just", "really"; [] for none), "no_question" (true/false), "technique" ("none" unless the principle is literally about one technique). Use at least one checkable field. The rule must agree with the principle (e.g. a "Playful follow-up" drill must allow questions).
+- "texts": exactly 5 NEW incoming texts. "text" is the message THE MATCH sends to the player (3-25 words, lowercase-ish, concrete detail); the player will write the reply. "context" is one second-person sentence about the situation BEFORE that message (e.g. "You asked how their Monday is going."); it must not contain the match's message. Example: {"context": "You told them you were baking bread tonight.", "text": "bold of you to assume i won't judge the crust"}. They must bait the target habit, fit Stage %d, vary in type (update, they tease you, dry reply, question to you, compliment), and not repeat anything in the profile.
+%s
+Respond ONLY with JSON."""
+DSCHEMA = {"type": "object", "additionalProperties": False, "required": ["title", "habit", "principle", "why", "rule", "texts"], "properties": {
+    "title": {"type": "string"}, "habit": {"type": "string", "enum": FLAGS}, "principle": {"type": "string", "enum": list(PRINCIPLES)},
+    "why": {"type": "string"},
+    "rule": {"type": "object", "additionalProperties": False, "required": ["text", "max_words", "ban_words", "no_question", "technique"], "properties": {
+        "text": {"type": "string"}, "max_words": {"type": "integer"}, "ban_words": {"type": "array", "items": {"type": "string"}},
+        "no_question": {"type": "boolean"}, "technique": {"type": "string", "enum": TECH_IDS + ["none"]}}},
+    "texts": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["context", "text"],
+        "properties": {"context": {"type": "string"}, "text": {"type": "string"}}}}}}
+
+def habit_profile(atts):
+    """atts: newest first, dicts with reply, verdict, score, flags, technique."""
+    atts = [a for a in atts if a.get("reply")][:60]
+    fc = {}
+    for a in atts:
+        for f in a.get("flags") or []: fc[f] = fc.get(f, 0) + 1
+    passes = [a for a in atts if a.get("verdict") == "Pass"]
+    weak = [a for a in atts if a.get("verdict") != "Pass" and a.get("flags")]
+    top = sorted(fc.items(), key=lambda x: -x[1])
+    lines = ["%d replies, %d passes (%d%%), average score %d." % (len(atts), len(passes), 100 * len(passes) // max(1, len(atts)),
+             sum(a.get("score") or 0 for a in atts) // max(1, len(atts))),
+             "Habit flags (count): " + (", ".join("%s %d" % kv for kv in top) or "none yet")]
+    lines += ['PASS: "%s"' % clean(a["reply"], 140) for a in passes[:4]]
+    lines += ['WEAK (%s): "%s"' % (", ".join(a["flags"]), clean(a["reply"], 140)) for a in weak[:8]]
+    return "\n".join(lines), top, weak
+
+def suggest_drill(atts, stage, focus=None, avoid=()):
+    prof, top, weak = habit_profile(atts)
+    habit = focus if focus in FLAGS else (top[0][0] if top else "clunky")
+    pri = "\n".join("- %s: %s (%s)" % (k, v["idea"], v["source"]) for k, v in PRINCIPLES.items())
+    extra = "Target habit: %s (suggested principle: %s)." % (habit, FLAG_PRINCIPLE.get(habit, "one_idea"))
+    if avoid: extra += " Do not reuse these drill titles: %s." % json.dumps(list(avoid)[:10])
+    for _ in range(2):
+        s = json.loads(llm([{"role": "system", "content": DRILL % (prof, pri, stage, extra)}, {"role": "user", "content": "Design the drill."}], DSCHEMA, 0.9, 1200))
+        texts = [{"context": clean(t["context"], 200), "text": clean(t["text"], 220)} for t in s["texts"] if 3 <= len(clean(t.get("text", ""), 220))][:5]
+        rule = clean_rule(s["rule"])
+        if rule:
+            rule["technique"] = "push_pull" if s["principle"] == "push_pull" else None   # forced techniques made drills too narrow
+            if s["principle"] == "playful_followup": rule["no_question"] = False
+        if len(texts) >= 4 and rule and rule["text"]: break
+    else:
+        raise ValueError("drill generation failed")
+    why = clean(s["why"], 500)
+    def quoted(r):
+        m = difflib.SequenceMatcher(None, why.lower(), r.lower()).find_longest_match(0, len(why), 0, len(r))
+        return m.size >= min(18, len(r))
+    if weak and not any(quoted(clean(a["reply"], 140)) for a in atts if a.get("reply")):  # make sure it quotes them
+        why += ' For example you wrote: "%s".' % clean(weak[0]["reply"], 120)
+    if not (rule["max_words"] or rule["ban_words"] or rule["no_question"] or rule["technique"]):
+        rule["max_words"] = 15
+    return {"title": clean(s["title"], 60), "habit": s["habit"] if s["habit"] in FLAGS else habit, "principle": s["principle"],
+            "why": why, "rule": rule, "texts": texts, "pass_need": max(1, len(texts) - 1), "stage": stage}
+
+def drill_out(row):
+    s = json.loads(row["spec"])
+    s.update(id=row["id"], saved=bool(row["saved"]), runs=row["runs"], best=row["best"], cleared=bool(row["cleared"]),
+             principle_info=PRINCIPLES.get(s.get("principle"), {}))
+    s.pop("runs_seen", None)
+    return s
+
+def drill_get(uid, did):
+    return q("SELECT * FROM drills WHERE id=? AND user_id=?", (did, uid), one=True)
+
+def drill_api(p, d, user):
+    if p == "/drill/suggest":
+        if user:
+            atts = history(user["id"], 60)
+            prog = get_progress(user["id"])
+            avoid = [json.loads(r["spec"]).get("title") for r in q("SELECT spec FROM drills WHERE user_id=? ORDER BY created DESC LIMIT 10", (user["id"],))]
+        else:
+            atts = [{"reply": clean(a.get("reply", ""), 300), "verdict": a.get("verdict"), "score": a.get("score") if isinstance(a.get("score"), int) else 0,
+                     "flags": [f for f in (a.get("flags") or []) if f in FLAGS]} for a in (d.get("attempts") or [])[:60] if isinstance(a, dict)]
+            prog, avoid = None, d.get("avoid") or []
+        stage = max([n for n in (1, 2, 3) if not prog or unlocked(prog, n)])
+        spec = suggest_drill(atts, stage, d.get("focus"), avoid)
+        did = secrets.token_hex(6)
+        if user:
+            q("DELETE FROM drills WHERE user_id=? AND saved=0 AND created<?", (user["id"], time.time() - 86400), write=True)
+            q("INSERT INTO drills(id, user_id, created, spec) VALUES(?,?,?,?)", (did, user["id"], time.time(), json.dumps(spec)), write=True)
+            return 200, drill_out(drill_get(user["id"], did))
+        spec.update(id="g" + did, saved=False, runs=0, best=0, cleared=False, principle_info=PRINCIPLES.get(spec["principle"], {}))
+        return 200, spec
+    if not user: return 401, {"error": "log in to save drills"}
+    row = drill_get(user["id"], clean(d.get("id", ""), 20))
+    if not row: return 404, {"error": "drill not found"}
+    if p == "/drill/save":
+        q("UPDATE drills SET saved=1 WHERE id=?", (row["id"],), write=True)
+        return 200, drill_out(drill_get(user["id"], row["id"]))
+    if p == "/drill/remove":
+        q("DELETE FROM drills WHERE id=?", (row["id"],), write=True)
+        return 200, {"ok": True}
+    if p == "/drill/result":
+        run = clean(d.get("run", ""), 40); s = json.loads(row["spec"])
+        rows = q("SELECT verdict FROM attempts WHERE user_id=? AND drill_run=?", (user["id"], run))
+        ps = sum(r["verdict"] == "Pass" for r in rows)
+        seen = s.setdefault("runs_seen", [])
+        if run and run not in seen and rows:
+            seen.append(run); del seen[:-50]
+            cleared = row["cleared"] or ps >= s.get("pass_need", 4)
+            q("UPDATE drills SET runs=runs+1, best=MAX(best,?), cleared=?, spec=? WHERE id=?", (ps, int(bool(cleared)), json.dumps(s), row["id"]), write=True)
+        out = drill_out(drill_get(user["id"], row["id"]))
+        out["run_passes"] = ps
+        return 200, out
+    return 404, {"error": "not found"}
+
 recent_gen = []  # global recent generated texts, to avoid repeats
 def generate(d, uid):
     stage = int(d.get("stage", 1)); stage = stage if stage in (1, 2, 3) else 1
@@ -338,7 +533,7 @@ def user_from(h):
     return dict(r) if r else None
 
 def history(uid, limit):
-    rows = q("SELECT ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge FROM attempts WHERE user_id=? ORDER BY ts DESC LIMIT ?", (uid, limit))
+    rows = q("SELECT ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge, drill_run FROM attempts WHERE user_id=? ORDER BY ts DESC LIMIT ?", (uid, limit))
     return [dict(r, flags=json.loads(r["flags"] or "[]")) for r in rows]
 
 def signup_login(d, ip, signup):
@@ -388,7 +583,9 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/health": return self._send(200, {"ok": True, "model": MODEL})
         if u.path == "/techniques": return self._send(200, {"techniques": TECHNIQUES})
         user = user_from(self)
-        if u.path in ("/me", "/history") and not user: return self._send(401, {"error": "log in again"})
+        if u.path in ("/me", "/history", "/drills") and not user: return self._send(401, {"error": "log in again"})
+        if u.path == "/drills":
+            return self._send(200, {"drills": [drill_out(r) for r in q("SELECT * FROM drills WHERE user_id=? AND saved=1 ORDER BY created DESC", (user["id"],))]})
         if u.path == "/me":
             return self._send(200, {"name": user["name"], "progress": get_progress(user["id"]), "attempts": history(user["id"], 200)})
         if u.path == "/history":
@@ -397,7 +594,8 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
     def do_POST(self):
         p = self.path
-        if p not in ("/judge", "/reply", "/generate", "/help", "/signup", "/login", "/logout", "/rally_result"):
+        if p not in ("/judge", "/reply", "/generate", "/help", "/signup", "/login", "/logout", "/rally_result",
+                     "/drill/suggest", "/drill/save", "/drill/remove", "/drill/result"):
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -409,11 +607,20 @@ class H(BaseHTTPRequestHandler):
                 q("DELETE FROM sessions WHERE token=?", (self.headers.get("Authorization", "")[7:],), write=True)
                 return self._send(200, {"ok": True})
             if p == "/rally_result": return self._send(*rally_result(d, user))
+            if p in ("/drill/save", "/drill/remove", "/drill/result"): return self._send(*drill_api(p, d, user))
             if limited(hits, self._ip(), RATE): return self._send(429, {"error": "slow down"})
+            if p == "/drill/suggest": return self._send(*drill_api(p, d, user))
             if p == "/reply": return self._send(200, reply_llm(d))
             if p == "/help": return self._send(200, help_llm(d))
             if p == "/generate": return self._send(200, generate(d, user and user["id"]))
             stage = int(d.get("stage", 1))
+            key = clean(d.get("key", ""), 40)
+            if key.startswith("drill:"):   # drill rule: from the DB for profiles, from the client for guests
+                row = user and drill_get(user["id"], key.split(":")[1])
+                spec = json.loads(row["spec"]) if row else ({"rule": d.get("drill_rule"), "principle": d.get("drill_principle")} if not user else None)
+                if not spec: return self._send(404, {"error": "drill not found"})
+                d["_rule"] = clean_rule(spec.get("rule"))
+                d["_principle"] = PRINCIPLES.get(spec.get("principle"), {}).get("idea", "")
             if user:
                 prog = get_progress(user["id"])
                 if not unlocked(prog, stage): return self._send(403, {"error": "stage locked"})
@@ -422,14 +629,15 @@ class H(BaseHTTPRequestHandler):
             else:
                 j = judge_llm(d)
             if user:
-                key = clean(d.get("key", ""), 40)
                 them = next((clean(m.get("t", "")) for m in reversed(d.get("thread", [])) if isinstance(m, dict) and m.get("who") == "them"), "")
                 rid = clean(d.get("rally_id", ""), 40) or None
                 ch = d.get("challenge") if d.get("challenge") in TECH else None
-                q("INSERT INTO attempts(user_id, ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                  (user["id"], time.time(), stage, key, "gen" if key.startswith("gen:") else "core", them, clean(d.get("reply", "")),
-                   j["verdict"], j["score"], json.dumps(j["flags"]), j["diagnosis"], rid, j["technique"], ch), write=True)
-                apply_attempt(prog, stage, None if rid else key, j["verdict"])
+                run = clean(d.get("drill_run", ""), 40) or None
+                src = "gen" if key.startswith("gen:") else "drill" if key.startswith("drill:") else "core"
+                q("INSERT INTO attempts(user_id, ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge, drill_run) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (user["id"], time.time(), stage, key, src, them, clean(d.get("reply", "")),
+                   j["verdict"], j["score"], json.dumps(j["flags"]), j["diagnosis"], rid, j["technique"], ch, run), write=True)
+                apply_attempt(prog, stage, None if (rid or src == "drill") else key, j["verdict"])
                 set_progress(user["id"], prog)
                 j["progress"] = prog
             self._send(200, j)

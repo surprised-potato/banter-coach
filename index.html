@@ -55,6 +55,9 @@ textarea,input{background:var(--panel);color:var(--ink);border:1px solid var(--l
 textarea{flex:1;resize:none;max-height:110px}
 input{width:100%;margin:6px 0 10px}
 .err{color:var(--dead)}
+.drow{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.drow:first-of-type{border-top:0}
+select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;flex:1;min-width:0}
 .deck{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tc{text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px}
 .tc b{display:block;font-size:14px}.tc small{display:block;color:var(--mut);margin-top:2px}
@@ -161,7 +164,7 @@ function rangeScore(){const r=A.slice(0,15);if(r.length<3)return null;const d=ne
 /* ---------- state ---------- */
 let TOKEN=ls.get('bc_token'),NAME=ls.get('bc_name'),P=null,A=[];   // progress, attempts (newest first)
 const newP=()=>({xp:0,streak:0,best:0,tries:0,passes:0,passed:{1:[],2:[],3:[]},rally:{}});
-function loadGuest(){try{const g=JSON.parse(ls.get('bc_guest'));if(g&&g.P){P=g.P;A=g.A||[];return}}catch(e){}P=newP();A=[]}
+function loadGuest(){loadGuestDrills();try{const g=JSON.parse(ls.get('bc_guest'));if(g&&g.P){P=g.P;A=g.A||[];return}}catch(e){}P=newP();A=[]}
 function saveGuest(){if(!TOKEN)ls.set('bc_guest',JSON.stringify({P,A:A.slice(0,200)}))}
 const passedOf=n=>P.passed[n]||P.passed[String(n)]||[];
 const unlocked=n=>n===1||!!P.rally[n-1];
@@ -223,6 +226,8 @@ function nextDrill(){
   const st=STAGES[top-1];
   const unpassed=st.sc.map((s,i)=>i).filter(i=>!passedOf(top).includes(coreKey(top,i)));
   if(weak){
+    const dd=DRILLS.find(x=>!x.cleared&&weak.flags.includes(x.habit));
+    if(dd)return{type:'drill',d:dd,reason:`${weak.name} is your weakest skill, and your saved drill "${dd.title}" targets it.`};
     const recent6=A.slice(0,6),cnt=recent6.filter(a=>(a.flags||[]).some(f=>weak.flags.includes(f))).length;
     const why=cnt?`You ${weak.why} in ${cnt} of your last ${recent6.length} replies.`:`${weak.name} is your weakest skill (${weak.m}).`;
     const i=unpassed.find(i=>weak.flags.includes(st.sc[i][1]));
@@ -276,24 +281,99 @@ function login(msg){
 }
 function checkSrv(){fetch(API+'/health').then(r=>r.json()).then(()=>{const s=$('#srv');if(s)s.textContent='online ✓'}).catch(()=>{const s=$('#srv');if(s)s.innerHTML='<span class="err">offline: the host machine is asleep or LM Studio is off</span>'})}
 function logout(expired){if(TOKEN)fetch(API+'/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{});TOKEN=null;ls.del('bc_token');P=null;A=[];cur=null;hud();if(location.hash!=='#login')location.hash='#login';login(expired?'Session expired. Log in again.':'')}
-async function refresh(){if(!TOKEN)return;const j=await api('/me');P=j.progress;A=j.attempts;NAME=j.name}
+async function refresh(){if(!TOKEN)return;const j=await api('/me');P=j.progress;A=j.attempts;NAME=j.name;try{DRILLS=(await api('/drills')).drills}catch(e){DRILLS=[]}}
+let DRILLS=[],DRAFT=null;
+function loadGuestDrills(){try{DRILLS=JSON.parse(ls.get('bc_drills')||'[]')}catch(e){DRILLS=[]}}
+function saveGuestDrills(){if(!TOKEN)ls.set('bc_drills',JSON.stringify(DRILLS))}
+const ruleChips=r=>[r.max_words?'≤ '+r.max_words+' words':'',...(r.ban_words||[]).map(w=>'no "'+w+'"'),r.no_question?'no questions':'',r.technique?'use '+techName(r.technique):''].filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('');
+function topHabits(){const c={};A.slice(0,60).forEach(a=>(a.flags||[]).forEach(f=>c[f]=(c[f]||0)+1));return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,6)}
 
 const skillRow=s=>`<div class="sk"><span>${s.name}</span><div class="bar"><i style="width:${s.m??0}%"></i></div><em>${s.m??'–'}</em></div>`;
 /* ---------- home (dynamic) ---------- */
+function drillsCard(){
+  const hb=topHabits();
+  return `<div class="card"><div class="k">My drills</div>${DRILLS.length?DRILLS.map(d=>`<div class="drow"><div style="flex:1;min-width:0"><b>${d.cleared?'✓ ':''}${esc(d.title)}</b><small class="note" style="display:block;margin:0">${esc(d.habit)} · ${esc((d.principle_info||{}).name||d.principle)} · best ${d.best||0}/${d.texts.length}${d.runs?' · '+d.runs+' run'+(d.runs>1?'s':''):''}</small></div><button class="btn sm" data-dp="${esc(d.id)}">Play</button><button class="btn ghost sm" data-dx="${esc(d.id)}" aria-label="Remove drill">✕</button></div>`).join(''):'<p class="note">No saved drills yet. Generate one from your habits.</p>'}
+  <div class="row" style="margin-top:10px"><select id="dfocus" aria-label="Habit to focus on"><option value="">Focus: my worst habit</option>${hb.map(([f,n])=>`<option value="${esc(f)}">${esc(f)} (${n})</option>`).join('')}</select><button class="btn" id="dgen">✨ Generate drill</button></div></div>`;
+}
+function wireDrills(){
+  main.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>playDrill(DRILLS.find(x=>x.id===b.dataset.dp)));
+  main.querySelectorAll('[data-dx]').forEach(b=>b.onclick=()=>removeDrill(b.dataset.dx));
+  const g=$('#dgen');if(g)g.onclick=()=>genDrill($('#dfocus').value);
+}
+async function genDrill(focus){
+  cur=null;foot.hidden=true;$('#ttl').textContent='New drill';
+  main.innerHTML='<div class="card"><p class="note" style="margin:0">Reading your last replies and designing a drill… (about 10 s)</p></div>';
+  try{
+    const body={focus:focus||undefined};
+    if(!TOKEN){body.attempts=A.slice(0,60).map(a=>({reply:a.reply,verdict:a.verdict,score:a.score,flags:a.flags}));body.avoid=DRILLS.map(d=>d.title)}
+    DRAFT=await api('/drill/suggest',body);DRAFT._focus=focus;drillPreview();
+  }catch(e){main.innerHTML=`<div class="card err">Couldn't design a drill (${esc(e.message)}).</div><button class="btn ghost" id="back">← Home</button>`;$('#back').onclick=()=>go('#home')}
+}
+function drillPreview(){
+  const d=DRAFT,pi=d.principle_info||{};
+  $('#ttl').textContent='New drill';
+  main.innerHTML=`<div class="card hero"><div class="k">Drill · targets ${esc(d.habit)}</div><h2 style="margin:4px 0 8px;font-size:22px">${esc(d.title)}</h2>
+  <p style="margin:0 0 10px">${esc(d.why)}</p>
+  <div class="k">Rule for every reply</div><p style="margin:4px 0 0">${esc(d.rule.text)}</p><div class="chips">${ruleChips(d.rule)}</div>
+  <p class="note" style="margin-top:10px"><b>${esc(pi.name||'')}</b>: ${esc(pi.idea||'')}<br><i>Inspired by ${esc(pi.source||'')}</i></p></div>
+  <div class="card"><div class="k">${d.texts.length} texts · pass ${d.pass_need} to clear</div>${d.texts.map((t,i)=>`<p style="margin:8px 0 0"><small class="note">📍 ${esc(t.context)}</small><br>"${esc(t.text)}"</p>`).join('')}</div>
+  <div class="row"><button class="btn" id="dsave">Save</button><button class="btn ghost" id="dplay">Play now</button><button class="btn ghost" id="dregen">↻ Regenerate</button><button class="btn ghost" id="ddisc">Discard</button></div>`;
+  $('#dsave').onclick=async()=>{
+    try{if(TOKEN){const s=await api('/drill/save',{id:d.id});DRILLS.unshift(s)}else{d.saved=true;DRILLS.unshift(d);saveGuestDrills()}DRAFT=null;go('#home')}
+    catch(e){alert('Could not save: '+e.message)}
+  };
+  $('#dplay').onclick=()=>playDrill(d);
+  $('#dregen').onclick=()=>genDrill(d._focus);
+  $('#ddisc').onclick=async()=>{if(TOKEN)api('/drill/remove',{id:d.id}).catch(()=>{});DRAFT=null;go('#home')};
+}
+async function removeDrill(id){
+  const d=DRILLS.find(x=>x.id===id);if(!d||!confirm('Remove the drill "'+d.title+'"?'))return;
+  try{if(TOKEN)await api('/drill/remove',{id});DRILLS=DRILLS.filter(x=>x.id!==id);saveGuestDrills();home()}
+  catch(e){alert('Could not remove: '+e.message)}
+}
+function playDrill(d){
+  if(!d)return;
+  cur={drill:d,di:0,run:'d'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),dv:[],busy:false};
+  drillText();
+}
+function drillText(){
+  const d=cur.drill,i=cur.di,t=d.texts[i];
+  Object.assign(cur,{stage:d.stage||1,key:'drill:'+d.id+':'+i,ctx:t.context,text:t.text,thread:[{who:'them',t:t.text}],help:[],lastHelp:[]});
+  shell('Drill · '+d.title,`<span class="tag ch">🧪 ${i+1}/${d.texts.length}</span>${esc(d.rule.text)}<div class="chips">${ruleChips(d.rule)}</div>`);
+  inp.placeholder=d.rule.max_words?'Max '+d.rule.max_words+' words…':'Type your reply…';
+  ctxLine(t.context);bubble('them',t.text);
+}
+async function drillTurn(verdict){
+  const d=cur.drill;cur.dv.push(verdict);const ps=cur.dv.filter(v=>v==='Pass').length;
+  if(cur.di<d.texts.length-1){
+    $('#res').insertAdjacentHTML('beforeend',`<div class="card"><b>${ps} pass${ps==1?'':'es'} so far</b> (need ${d.pass_need} of ${d.texts.length}).<div class="row" style="margin-top:10px"><button class="btn" id="dnx">Next text →</button></div></div>`);
+    $('#dnx').onclick=()=>{cur.di++;drillText()};foot.hidden=true;main.scrollTop=main.scrollHeight;return;
+  }
+  foot.hidden=true;let out=null;
+  if(TOKEN&&d.saved){try{out=await api('/drill/result',{id:d.id,run:cur.run})}catch(e){}}
+  else{const runs=(d.runs||0)+1,best=Math.max(d.best||0,ps),cleared=d.cleared||ps>=d.pass_need;out={...d,runs,best,cleared}}
+  if(out){const k=DRILLS.findIndex(x=>x.id===d.id);if(k>=0){DRILLS[k]={...DRILLS[k],runs:out.runs,best:out.best,cleared:out.cleared};saveGuestDrills()}}
+  const win=ps>=d.pass_need;
+  $('#res').insertAdjacentHTML('beforeend',`<div class="card"><b>${win?'Drill cleared! ':'Drill done. '}${ps}/${d.texts.length} passes</b> (need ${d.pass_need}).${d.saved?'':' <span class="note">Not saved: save it from the preview to track progress.</span>'}<div class="row" style="margin-top:10px"><button class="btn" id="drt">Run it again</button><button class="btn ghost" id="dhm">Home</button></div></div>`);
+  $('#drt').onclick=()=>playDrill(d);$('#dhm').onclick=()=>{cur=null;go('#home')};
+  main.scrollTop=main.scrollHeight;
+}
 function home(){
   cur=null;$('#ttl').textContent='Banter Coach';hud();
   const d=nextDrill();
   let h=`<button class="card hero" id="nd"><div class="k">Next drill</div><b style="display:block;margin:4px 0">${
-    d.type==='rally'?'⚔ Stage '+d.stage+' rally':d.type==='gen'?'✨ Fresh Stage '+d.stage+' text':(d.s.challenge?'🎯 Use: '+esc(techName(d.s.challenge))+'<br>':'')+'"'+esc(d.s.text.slice(0,70))+(d.s.text.length>70?'…':'')+'"'}</b><small class="note">${esc(d.reason)}</small></button>`;
+    d.type==='rally'?'⚔ Stage '+d.stage+' rally':d.type==='drill'?'🧪 Drill: '+esc(d.d.title):d.type==='gen'?'✨ Fresh Stage '+d.stage+' text':(d.s.challenge?'🎯 Use: '+esc(techName(d.s.challenge))+'<br>':'')+'"'+esc(d.s.text.slice(0,70))+(d.s.text.length>70?'…':'')+'"'}</b><small class="note">${esc(d.reason)}</small></button>`;
   for(const st of STAGES){
     const n=st.n,dn=passedOf(n).length,lock=!unlocked(n);
     h+=`<button class="card stage ${lock?'lock':''}" data-s="${n}"><span class="num">${lock?'🔒':P.rally[n]?'✓':n}</span><span style="flex:1"><b>${st.name}</b><small>${lock?'Win the Stage '+(n-1)+' rally to unlock.':st.sub}</small><div class="bar"><i style="width:${Math.min(100,dn/NEED*100)}%"></i></div><small>${dn}/${NEED} passes${P.rally[n]?' · rally cleared':''}</small></span></button>`;
   }
+  h+=drillsCard();
   const ms=mastery();
   h+=`<button class="card" id="st"><div class="k">Skills</div>${ms[0].m===null?'<p class="note">Play 3 texts to see your skill bars.</p>':ms.map(skillRow).join('')}<small class="note">Tap for stats and history →</small></button>`;
   if(!TOKEN)h+=`<p class="note">Playing as guest. <a href="#login">Log in or create a profile</a> to save across devices.</p>`;
   main.innerHTML=h;
-  $('#nd').onclick=()=>d.type==='rally'?rally(d.stage):d.type==='gen'?playGen(d.stage,d.trap):play(d.s);
+  $('#nd').onclick=()=>d.type==='rally'?rally(d.stage):d.type==='gen'?playGen(d.stage,d.trap):d.type==='drill'?playDrill(d.d):play(d.s);
+  wireDrills();
   main.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const n=+b.dataset.s;if(unlocked(n))go('#stage/'+n)});
   $('#st').onclick=()=>go('#stats');
 }
@@ -328,6 +408,7 @@ function stats(){
   const habits=Object.entries(fc).sort((a,b)=>b[1].n-a[1].n).slice(0,3);
   const ms=mastery();
   let h=`<div class="card"><div class="grid3"><div><b>${level()}</b><small class="note">level</small></div><div><b>${P.passes}/${P.tries}</b><small class="note">passes</small></div><div><b>${P.best}</b><small class="note">best streak</small></div></div></div>
+  ${DRILLS.length?`<div class="card"><div class="k">Drills</div><p style="margin:6px 0 0">${DRILLS.filter(d=>d.cleared).length} cleared of ${DRILLS.length} saved · ${DRILLS.reduce((n,d)=>n+(d.runs||0),0)} runs</p></div>`:''}
   <div class="card"><div class="k">Pass rate by stage</div><div class="grid3" style="margin-top:6px">${[1,2,3].map(n=>`<div><b>${pr(n)}</b><small class="note">Stage ${n}</small></div>`).join('')}</div></div>
   <div class="card"><div class="k">Score trend</div>${spark}</div>
   <div class="card"><div class="k">Skills (last 10 replies)</div>${ms[0].m===null?'<p class="note">Play 3 texts first.</p>':ms.map(skillRow).join('')}</div>
@@ -349,7 +430,8 @@ function shell(title,tags){
   $('#ttl').textContent=title;foot.hidden=false;hud();
   $('#helpbox').innerHTML='';
   main.innerHTML=`<div class="note">${tags}<button class="btn ghost sm" id="exit" style="float:right">Exit</button></div><div class="chat" id="chat"></div><div id="res"></div>`;
-  $('#exit').onclick=()=>{const n=cur.stage;cur=null;go('#stage/'+n)};inp.value='';inp.focus();
+  inp.placeholder='Type your reply…';
+  $('#exit').onclick=()=>{const n=cur.stage,dr=cur.drill;cur=null;dr?go('#home'):go('#stage/'+n)};inp.value='';inp.focus();
   if(location.hash!=='#play')location.hash='#play';
 }
 function play(s){
@@ -378,13 +460,13 @@ async function submit(){
   bubble('me',t);
   const ty=bubble('them','coach is reading…','typing');
   try{
-    const j=await api('/judge',{stage:cur.stage,key:cur.key,context:cur.ctx,help_shown:cur.help||[],challenge:cur.challenge,recent:A.slice(0,6).map(a=>a.reply),thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined});
+    const j=await api('/judge',{stage:cur.stage,key:cur.key,context:cur.ctx,help_shown:cur.help||[],challenge:cur.challenge,recent:A.slice(0,6).map(a=>a.reply),thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined,drill_run:cur.drill?cur.run:undefined,drill_rule:cur.drill&&!TOKEN?cur.drill.rule:undefined,drill_principle:cur.drill&&!TOKEN?cur.drill.principle:undefined});
     cur.thread.push({who:'me',t});ty.remove();$('#helpbox').innerHTML='';cur.help=[];
     const rec={ts:Date.now()/1000,stage:cur.stage,scenario_key:cur.key,them_text:[...cur.thread].reverse().find(m=>m.who==='them').t,reply:t,verdict:j.verdict,score:j.score,flags:j.flags,diagnosis:j.diagnosis,rally_id:cur.boss?cur.rid:null,technique:j.technique,challenge:cur.challenge||null};
     A.unshift(rec);
-    if(j.progress)P=j.progress;else{applyAttempt(cur.stage,cur.boss?null:cur.key,j.verdict);saveGuest()}
+    if(j.progress)P=j.progress;else{applyAttempt(cur.stage,(cur.boss||cur.drill)?null:cur.key,j.verdict);saveGuest()}
     card(j);hud();
-    if(cur.boss)await bossTurn(j.verdict);else plainTurn(j.verdict==='Pass');
+    if(cur.boss)await bossTurn(j.verdict);else if(cur.drill)await drillTurn(j.verdict);else plainTurn(j.verdict==='Pass');
   }catch(e){
     ty.remove();inp.value=t;$('#chat').lastChild.remove();
     $('#res').innerHTML=`<div class="card err">Couldn't reach the coach (${esc(e.message)}). The host machine may be offline. Try again.</div>`;

@@ -1,3 +1,4 @@
 banter.db
 *.db
+*.db.bak*
 __pycache__/
