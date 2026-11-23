@@ -346,7 +346,8 @@ def reply_llm(d):
     return {"text": clean(llm(msgs, None, 0.9, 150), 300)}
 
 HELP = """You are the banter coach giving a hint BEFORE the player replies. Stage %d goal: %s
-Give: "tip": one blunt sentence on what to avoid and what angle to take for THIS text.
+You coach the PLAYER, who is about to reply to the match's latest message. You never speak as the match and never react to the player's earlier texts.
+Give: "tip": one blunt sentence to the player on what to avoid and what angle to take when replying to the match's latest message.
 "examples": exactly one example reply for EACH of these techniques, in this order:
 %s
 Each "line" is short, natural texting style, specific to THIS message (reuse its concrete details), playful, low-pressure, never thirsty. The three lines must not share an opener or structure.
@@ -363,9 +364,14 @@ HSCHEMA = {"type": "object", "additionalProperties": False, "required": ["tip", 
 def help_llm(d):
     stage = int(d.get("stage", 1)); stage = stage if stage in (1, 2, 3) else 1
     ctx = clean(d.get("context", ""), 300)
-    thread = [("THEM: " if m.get("who") == "them" else "USER: ") + clean(m.get("t", ""))
-              for m in d.get("thread", [])[-8:] if isinstance(m, dict) and clean(m.get("t", ""))]
-    prompt = ("Situation: %s\n" % ctx if ctx else "") + "Thread (oldest first):\n" + "\n".join(thread) + "\nGive the hint for the user's next reply."
+    msgs = [m for m in d.get("thread", [])[-8:] if isinstance(m, dict) and clean(m.get("t", ""))]
+    while msgs and msgs[-1].get("who") != "them": msgs.pop()      # the player answers THEM's last message
+    if not msgs: raise ValueError("no message to reply to")
+    target = clean(msgs[-1]["t"])
+    earlier = [("THEM: " if m.get("who") == "them" else "PLAYER: ") + clean(m["t"]) for m in msgs[:-1]]
+    prompt = (("Situation: %s\n" % ctx if ctx else "")
+              + ("Earlier in the thread (already sent, context only, do NOT critique or answer these):\n%s\n" % "\n".join(earlier) if earlier else "")
+              + 'THEM just sent: "%s"\nCoach the PLAYER on what to send back to THAT message. The tip is advice to the player; each example line is a text the PLAYER sends to THEM.' % target)
     picks = pick_techniques(stage, d.get("used") or [], d.get("exclude") or [], 3)
     sysmsg = HELP % (stage, STAGE_GOALS[stage], "\n".join("%d. %s: %s" % (i + 1, TECH[t]["name"], TECH[t]["how"]) for i, t in enumerate(picks)))
     for _ in range(2):
