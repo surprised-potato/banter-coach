@@ -4,7 +4,7 @@ Judges replies, plays the match in rallies, generates fresh texts, and keeps
 name+PIN profiles with progress and attempt history in SQLite (banter.db).
 Run: python3 coach_proxy.py   (env: LMS_URL, MODEL, PORT, ORIGINS, DB)
 """
-import hashlib, hmac, json, os, re, secrets, sqlite3, threading, time
+import difflib, hashlib, hmac, json, os, re, secrets, sqlite3, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
@@ -18,7 +18,7 @@ RATE = int(os.environ.get("RATE", "30"))      # LLM requests / minute / IP
 AUTH_RATE = 5                                 # signup+login / minute / IP
 DB_PATH = os.environ.get("DB", os.path.join(HERE, "banter.db"))
 MAXLEN = 400
-FLAGS = ["agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed"]
+FLAGS = ["agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed", "borrowed"]
 NEED = 3  # passes per stage before its rally
 
 COACH = """You are a blunt, uncompromising Flirting & Banter Coach training a user to turn friendly texts into playful, flirtatious banter. No participation trophies: if a reply is flat, safe, try-hard, needy, overly logical, a literal answer, an interview question, unsolicited advice, or a dead-end agreement, say so and explain why it would flop in a real text thread. Only call a line a Pass when it is genuinely sharp.
@@ -145,12 +145,21 @@ def judge_llm(d):
               for m in d.get("thread", [])[-8:] if isinstance(m, dict) and clean(m.get("t", ""))]
     ctx = clean(d.get("context", ""), 300)
     prompt = (("Situation: %s\n" % ctx if ctx else "") + "Stage %d.\nThread so far (oldest first):\n%s\n\nJudge ONLY the user's LAST text: %s" % (stage, "\n".join(thread), reply))
+    shown = [clean(x, 200) for x in (d.get("help_shown") or [])[:6] if isinstance(x, str)]
+    if shown:
+        prompt += "\nThe user was shown these coach example lines before replying: %s. If their reply copies or only lightly rewords one, the verdict is at most Weak: tell them to stop borrowing your lines and find their own angle." % json.dumps(shown)
     if d.get("rally"):
         prompt += "\nThis is a multi-turn rally: judge it against the whole thread so far, and whether the user is sustaining the bit without retreating to safe questions."
     j = json.loads(llm([{"role": "system", "content": COACH}, {"role": "user", "content": prompt}], SCHEMA))
     j["score"] = max(0, min(100, int(j["score"])))
     j["rewrites"] = [clean(r, 200) for r in j["rewrites"][:2]] if j["verdict"] != "Pass" else []
     j["flags"] = sorted(set(f for f in j["flags"] if f in FLAGS))
+    norm = lambda x: re.sub(r"[^a-z0-9 ]", "", x.lower())
+    if shown and max(difflib.SequenceMatcher(None, norm(reply), norm(x)).ratio() for x in shown) >= 0.7:
+        if j["verdict"] == "Pass":
+            j.update(verdict="Weak", score=min(j["score"], 55), rewrites=[])
+        j["diagnosis"] = "That's my line, not yours. Borrowing the coach's example won't help when it's live on your phone. Find your own angle on the same idea. " + j["diagnosis"]
+        j["flags"] = sorted(set(j["flags"]) | {"borrowed"})
     return j
 
 def reply_llm(d):
@@ -159,6 +168,27 @@ def reply_llm(d):
     for m in d.get("thread", [])[-8:]:
         msgs.append({"role": "assistant" if m.get("who") == "them" else "user", "content": clean(m.get("t", ""))})
     return {"text": clean(llm(msgs, None, 0.9, 150), 300)}
+
+HELP = """You are the banter coach giving a hint BEFORE the player replies. Stage %d goal: %s
+Give: "tip": one blunt sentence on what to avoid and what angle to take for THIS text.
+"examples": 2-3 sharp example replies, each with "technique" (2-4 words, e.g. "Mock judgment", "Absurd exaggeration", "Co-conspirator framing", "Hypothetical us", "Low-pressure invite") and "line" (the reply text, short, natural texting style). They must fit the situation and the last message, stay playful and low-pressure, and never be thirsty.
+Respond ONLY with JSON."""
+STAGE_GOALS = {1: "stop agreeing, advising or interviewing; tease, exaggerate, mock-judge, flip the script",
+               2: "create 'us' energy: hypothetical scenarios with both of you, playful compatibility tests, specific vibe-based compliments",
+               3: "turn the banter into a confident, specific, low-pressure invitation to meet"}
+HSCHEMA = {"type": "object", "additionalProperties": False, "required": ["tip", "examples"], "properties": {
+    "tip": {"type": "string"},
+    "examples": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["technique", "line"],
+        "properties": {"technique": {"type": "string"}, "line": {"type": "string"}}}}}}
+
+def help_llm(d):
+    stage = int(d.get("stage", 1)); stage = stage if stage in (1, 2, 3) else 1
+    ctx = clean(d.get("context", ""), 300)
+    thread = [("THEM: " if m.get("who") == "them" else "USER: ") + clean(m.get("t", ""))
+              for m in d.get("thread", [])[-8:] if isinstance(m, dict) and clean(m.get("t", ""))]
+    prompt = ("Situation: %s\n" % ctx if ctx else "") + "Thread (oldest first):\n" + "\n".join(thread) + "\nGive the hint for the user's next reply."
+    j = json.loads(llm([{"role": "system", "content": HELP % (stage, STAGE_GOALS[stage])}, {"role": "user", "content": prompt}], HSCHEMA, 0.8, 500))
+    return {"tip": clean(j["tip"], 300), "examples": [{"technique": clean(e["technique"], 40), "line": clean(e["line"], 200)} for e in j["examples"][:3]]}
 
 recent_gen = []  # global recent generated texts, to avoid repeats
 def generate(d, uid):
@@ -241,7 +271,7 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
     def do_POST(self):
         p = self.path
-        if p not in ("/judge", "/reply", "/generate", "/signup", "/login", "/logout", "/rally_result"):
+        if p not in ("/judge", "/reply", "/generate", "/help", "/signup", "/login", "/logout", "/rally_result"):
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -255,6 +285,7 @@ class H(BaseHTTPRequestHandler):
             if p == "/rally_result": return self._send(*rally_result(d, user))
             if limited(hits, self._ip(), RATE): return self._send(429, {"error": "slow down"})
             if p == "/reply": return self._send(200, reply_llm(d))
+            if p == "/help": return self._send(200, help_llm(d))
             if p == "/generate": return self._send(200, generate(d, user and user["id"]))
             j = judge_llm(d)
             if user:
