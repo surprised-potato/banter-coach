@@ -18,7 +18,7 @@ RATE = int(os.environ.get("RATE", "30"))      # LLM requests / minute / IP
 AUTH_RATE = 5                                 # signup+login / minute / IP
 DB_PATH = os.environ.get("DB", os.path.join(HERE, "banter.db"))
 MAXLEN = 400
-LLM_FLAGS = ["generic", "agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed", "hesitant"]
+LLM_FLAGS = ["friendly", "generic", "agreeing", "interviewing", "advice", "too literal", "thirsty", "try-hard", "pun only", "clunky", "bailed", "hesitant"]
 CODE_FLAGS = ["borrowed", "repetitive", "stale", "off-technique", "rule-broken"]   # set by code, never by the model
 FLAGS = LLM_FLAGS + CODE_FLAGS
 NEED = 3  # passes per stage before its rally
@@ -46,8 +46,10 @@ TECHNIQUES = [
   "ex": ["(earlier: they burn toast) THEM: i'm cooking tonight → \"Should I put the fire department on standby again?\""]},
  {"id": "nickname", "name": "Nickname", "stage": 1, "how": "Give them a playful title based on what they said.",
   "ex": ["THEM: i've rewatched friends 9 times → \"Noted. Hi, Professor of Central Perk\""]},
- {"id": "deadpan", "name": "Deadpan understatement", "stage": 1, "how": "React to something big as if it's tiny, or tiny as if it's huge, with a straight face.",
-  "ex": ["THEM: my cat knocked over my christmas tree → \"Sounds like he has notes on your decorating\""]},
+ {"id": "deadpan", "name": "Deadpan understatement", "stage": 1, "how": "Reply with flat, calm understatement, as if their drama is completely normal. No exaggeration, no exclamation marks: the joke is how unbothered you are.",
+  "ex": ["THEM: my cat knocked over my christmas tree → \"Sounds like he has notes on your decorating\"",
+         "THEM: my legs are jelly after the gym → \"Jelly legs. So, a light day then.\"",
+         "THEM: i burnt the rice again → \"Bold of the rice to keep trusting you.\""]},
  {"id": "co_conspirator", "name": "Co-conspirator", "stage": 1, "how": "Frame the two of you as a team against the world.",
   "ex": ["THEM: my roommate ate my leftovers → \"We need a plan. I'm thinking a fake leftover box full of salad\""]},
  {"id": "hypothetical_us", "name": "Hypothetical us", "stage": 2, "how": "Drop both of you into a tiny, specific future scene.",
@@ -66,7 +68,10 @@ STALE_RE = re.compile(r"^\W*careful\b|" + "|".join(re.escape(s).replace(r"\*", r
 
 COACH = """You are a blunt, uncompromising Flirting & Banter Coach training a user to turn friendly texts into playful, flirtatious banter. No participation trophies: if a reply is flat, safe, try-hard, needy, overly logical, a literal answer, an interview question, unsolicited advice, or a dead-end agreement, say so and explain why it would flop in a real text thread. Only call a line a Pass when it is genuinely sharp.
 Flirting is a dial, not a switch: low-pressure playful tension, teasing, exaggeration, mock judgment, role reversal, misdirection, co-conspirator framing. Never pickup lines, forced jokes, premature heavy compliments, asking for photos, or inviting yourself over (Dead End: thirsty, stranger-danger). Always respect the other person's comfort and consent; a good line is one the recipient would enjoy.
-Verdicts: "Pass" (sharp, calibrated, gives them something to bounce off), "Weak" (right instinct, flat or clunky or hedged), "Dead End" (agrees, interviews, advises, bails, thirsty, or kills the tension).
+Verdicts (judge how the reply would actually land with this person, then how playful it is):
+- "Pass": lands well AND is playful/flirty: sharp, specific, gives them something fun to bounce off.
+- "Weak": keeps the conversation alive but isn't playful or sharp yet. This includes warm, sincere or friendly replies (a genuine thanks, a normal follow-up question, a kind reaction): they are fine in real life, just not banter -> flag "friendly". Also flat, clunky, hedged, generic, literal, mild advice, or a dry interview question.
+- "Dead End": would actually stall or hurt the conversation: thirsty or too forward, rude or negging, a bare closed reply that gives nothing back ("ok", "lol", "same"), bailing, a lecture, or making it awkward. Do NOT use Dead End for replies that are merely friendly or not funny.
 Stage goals: 1 Pivot = stop agreeing/advising/interviewing, tease or exaggerate. 2 Frame = create 'us' energy with hypothetical scenarios, playful compatibility tests, specific vibe-based compliments. 3 Close = turn banter into a confident, low-pressure invitation to meet, not hesitant or over-eager.
 Principles (from research on teasing, charisma and conversation):
 - A tease needs a play signal (exaggeration, mock-drama, "lol", an obviously absurd claim) and must target something harmless; without the signal it reads as criticism -> "clunky".
@@ -89,7 +94,12 @@ THEM: "kitchen looks like a crime scene from homemade pasta" / USER: "send pics 
 THEM: same / USER: "Whoa, you sure i wont be accused as an accomplice if the cops see it?" -> Pass 85, co_conspirator (keeps their bit alive, low-pressure).
 THEM: "my legs are jelly after the gym" / USER: "So you're basically a wobbly flamingo with a gym membership" -> Pass 85, exaggeration.
 THEM: "debating if cereal counts as a real lunch" / USER: "Serves better as dinner honestly" -> Weak 40, none (agrees, coworker-in-Slack energy).
-THEM: same / USER: "What kind of cereal?" -> Dead End 10, none (interview question).
+THEM: same / USER: "What kind of cereal?" -> Weak 40, none (dry interview question: keeps it alive, zero play).
+THEM: same / USER: "lol" -> Dead End 10, none (gives them nothing back).
+THEM: "ok your taste in music is actually elite" / USER: "thank you!! i was really hoping you'd like it" -> Weak 58, none, friendly (warm and sincere, lands fine, but no play).
+THEM: same / USER: "Elite is a strong word. Correct, but strong." -> Pass 84, agree_amplify.
+THEM: "just got back from the gym, my legs are jelly" / USER: "Nice! What's your workout split?" -> Weak 42, none (interview question).
+THEM: same / USER: "Haha nice. Can I come watch you stretch later 😏" -> Dead End 12, none (thirsty, too forward).
 THEM: "you seem like trouble" / USER: "Trouble is underselling it. I've been banned from two bowling alleys" -> Pass 85, agree_amplify.
 THEM: "haha yeah" / USER: "That 'haha yeah' had real 'watching something better than this convo' energy" -> Pass 80, cold_read.
 THEM: "I'm weirdly competitive at board games" / USER: "Cute. I'll still destroy you at Monopoly though" -> Pass 85, push_pull.
@@ -180,6 +190,10 @@ with dbl:
     CREATE TABLE IF NOT EXISTS ratings(user_id INTEGER, item_id INTEGER, verdict TEXT, tags TEXT, ts REAL, PRIMARY KEY(user_id, item_id));
     CREATE TABLE IF NOT EXISTS eval_runs(id INTEGER PRIMARY KEY, user_id INTEGER, ts REAL, prompt_version TEXT, mode TEXT, status TEXT, results TEXT);
     """)
+    rcols = [r[1] for r in db.execute("PRAGMA table_info(ratings)")]
+    if "lands" not in rcols:
+        db.execute("ALTER TABLE ratings ADD COLUMN lands TEXT")
+        db.execute("ALTER TABLE ratings ADD COLUMN playful INTEGER")
     if "owner" not in [r[1] for r in db.execute("PRAGMA table_info(eval_items)")]:
         db.execute("ALTER TABLE eval_items ADD COLUMN owner INTEGER")   # set for a player's own replies: only they see them
     db.execute("""CREATE TABLE IF NOT EXISTS drills(id TEXT PRIMARY KEY, user_id INTEGER, created REAL, spec TEXT,
@@ -270,7 +284,7 @@ def cap(j, flag, note):
     if j["verdict"] == "Pass":
         j.update(verdict="Weak", score=min(j["score"], 55))
         note = "Capped at Weak: " + note + " (On its own the line works:)"
-    j["diagnosis"] = note + " " + j["diagnosis"]
+    j["diagnosis"] = (note + " " + j["diagnosis"]) if note else j["diagnosis"]
     j["flags"] = sorted(set(j["flags"]) | {flag})
 
 def judge_llm(d, recent=None):
@@ -293,7 +307,7 @@ def judge_llm(d, recent=None):
         prompt += "\nThis is a multi-turn rally: judge it against the whole thread so far, and whether the user is sustaining the bit without retreating to safe questions."
     if challenge:
         t = TECH[challenge]
-        prompt += "\nTECHNIQUE CHALLENGE: the user must use %s (%s). If the reply does not clearly use it, the verdict is at most Weak and the diagnosis must say so." % (t["name"], t["how"])
+        prompt += "\nTECHNIQUE CHALLENGE: the user must use %s (%s). Examples of this technique: %s. If the reply does not clearly use it, the verdict is at most Weak and the diagnosis must say so. BOTH rewrites must use %s (two different angles on it), labelled '%s'." % (t["name"], t["how"], " / ".join(t["ex"]), t["name"], challenge)
     if d.get("_personal"):
         prompt += "\nThis player's own ratings of other replies (align your verdicts with their taste):\n" + "\n".join(
             'THEM: "%s" / REPLY: "%s" -> %s' % (x["them"], x["reply"], x["verdict"]) for x in d["_personal"])
@@ -305,7 +319,9 @@ def judge_llm(d, recent=None):
     j["technique"] = j.get("technique") if j.get("technique") in TECH else "none"
     rw = [] if j["verdict"] == "Pass" else [r for r in j["rewrites"] if r.get("technique") in TECH and not STALE_RE.search(r.get("line", ""))]
     seen_t, j["rewrites"] = {j["technique"]}, []
-    for r in rw:  # different technique from the user's and from each other
+    if challenge:   # during a challenge, every rewrite demonstrates the challenge technique
+        j["rewrites"] = [{"technique": TECH[challenge]["name"], "line": clean(r["line"], 200)} for r in rw[:2]]
+    for r in ([] if challenge else rw):  # otherwise: different technique from the user's and from each other
         if r["technique"] not in seen_t and len(j["rewrites"]) < 2:
             seen_t.add(r["technique"]); j["rewrites"].append({"technique": TECH[r["technique"]]["name"], "line": clean(r["line"], 200)})
     j["flags"] = sorted(set(f for f in j["flags"] if f in LLM_FLAGS))
@@ -318,8 +334,11 @@ def judge_llm(d, recent=None):
     if STALE_RE.search(reply):
         j["flags"] = sorted(set(j["flags"]) | {"stale"})
         j["diagnosis"] += " Also: that phrasing is a worn-out template. It works once, then it reads like a script."
+    if challenge and j["technique"] != challenge and uses_technique(d, reply, challenge):
+        j["technique"] = challenge          # dedicated yes/no check overrules the judge's label
     if challenge and j["technique"] != challenge:
-        cap(j, "off-technique", "The challenge was %s, and this isn't it." % TECH[challenge]["name"])
+        name = TECH[challenge]["name"]
+        cap(j, "off-technique", "" if name.lower() in j["diagnosis"].lower() else "The challenge was %s, and this isn't it." % name)
     if j["verdict"] == "Pass" and (d.get("_rule") or d.get("rally")):
         second_look(j, d, reply)
     rule = d.get("_rule")
@@ -350,6 +369,19 @@ def second_look(j, d, reply):
         j.update(verdict="Weak", score=min(j["score"], 65))
         j["diagnosis"] = "Second look: " + clean(c.get("reason", ""), 240) + " " + j["diagnosis"]
         j["flags"] = sorted(set(j["flags"]) | {"generic"})
+
+TSCHEMA = {"type": "object", "additionalProperties": False, "required": ["uses"], "properties": {"uses": {"type": "boolean"}}}
+
+def uses_technique(d, reply, tid):
+    """Focused yes/no: does the reply use this technique? (more reliable than the judge's one-label guess)"""
+    t = TECH[tid]
+    them = next((clean(m.get("t", "")) for m in reversed(d.get("thread", [])) if isinstance(m, dict) and m.get("who") == "them"), "")
+    try:
+        return bool(json.loads(llm([{"role": "user", "content":
+            'Technique: %s = %s\nExamples: %s\nTHEM: "%s"\nREPLY: "%s"\nDoes the REPLY use this technique (even if the joke is weak)? Respond ONLY with JSON {"uses": true|false}.'
+            % (t["name"], t["how"], " / ".join(t["ex"]), them, reply)}], TSCHEMA, 0.0, 30))["uses"])
+    except Exception:
+        return False
 
 def word_re(w):
     return re.compile(r"(?<![\w'])" + re.escape(w.lower()) + r"(?![\w'])")
@@ -716,7 +748,7 @@ def metrics(pairs):
 
 def personal_examples(uid, k=8):
     """Up to k tuning-half ratings, disagreements with the latest baseline run first."""
-    rows = q("SELECT i.id, i.them, i.reply, r.verdict FROM ratings r JOIN eval_items i ON i.id=r.item_id WHERE r.user_id=?", (uid,))
+    rows = q("SELECT i.id, i.them, i.reply, r.verdict FROM ratings r JOIN eval_items i ON i.id=r.item_id WHERE r.user_id=? AND i.source<>'own'", (uid,))
     rows = [dict(r) for r in rows if is_tuning(r["id"])]
     last = q("SELECT results FROM eval_runs WHERE user_id=? AND mode='baseline' AND status='done' ORDER BY ts DESC LIMIT 1", (uid,), one=True)
     judged = {x["item_id"]: x["judge"] for x in json.loads(last["results"])} if last else {}
@@ -746,7 +778,7 @@ def eval_run(uid, mode, votes):
             if personal and any(p["reply"] == clean(it["reply"], 160) and p["them"] == clean(it["them"], 160) for p in personal):
                 continue                         # never test on an item that is in the prompt
             j = judge_item(it, personal, votes)
-            out.append({"item_id": it["id"], "human": it["human"], "judge": j["verdict"], "score": j["score"], "why": clean(j["diagnosis"], 300)})
+            out.append({"item_id": it["id"], "human": it["human"], "judge": j["verdict"], "score": j["score"], "why": clean(j["diagnosis"], 300), "own": it["source"] == "own"})
             q("UPDATE eval_runs SET results=? WHERE id=?", (json.dumps(out), rid), write=True)
         q("UPDATE eval_runs SET status='done', results=? WHERE id=?", (json.dumps(out), rid), write=True)
     except Exception as e:
@@ -760,14 +792,16 @@ def eval_report(uid):
     runs = []
     for r in q("SELECT * FROM eval_runs WHERE user_id=? ORDER BY ts DESC LIMIT 6", (uid,)):
         res = json.loads(r["results"] or "[]")
-        held = [(x["human"], x["judge"]) for x in res if not is_tuning(x["item_id"])]
+        fair = [x for x in res if not x.get("own")]          # your own lines are rated with bias: kept out of the score
+        held = [(x["human"], x["judge"]) for x in fair if not is_tuning(x["item_id"])]
         dis = []
         for x in res:
             if x["human"] != x["judge"]:
                 it = q("SELECT them, reply FROM eval_items WHERE id=?", (x["item_id"],), one=True)
                 if it: dis.append(dict(x, them=it["them"], reply=it["reply"]))
         runs.append({"id": r["id"], "ts": r["ts"], "mode": r["mode"], "status": r["status"], "prompt_version": r["prompt_version"],
-                     "all": metrics([(x["human"], x["judge"]) for x in res]), "held_out": metrics(held), "disagreements": dis[:40]})
+                     "all": metrics([(x["human"], x["judge"]) for x in fair]), "held_out": metrics(held),
+                     "own": metrics([(x["human"], x["judge"]) for x in res if x.get("own")]), "disagreements": dis[:40]})
     prog = get_progress(uid)
     return {"items": n_items, "rated": rated, "running": uid in eval_busy, "prompt_version": PROMPT_VERSION,
             "judge_mode": prog.get("judge", "baseline"), "runs": runs}
@@ -781,10 +815,15 @@ def eval_api(p, d, user, query=None):
         return 200, {"items": rows[:10], "left": len(rows), "total": q("SELECT COUNT(*) c FROM eval_items WHERE owner IS NULL OR owner=?", (uid,), one=True)["c"]}
     if p == "/eval/rate":
         iid = int(d.get("item_id", 0)); v = d.get("verdict")
+        lands = d.get("lands") if d.get("lands") in ("yes", "meh", "no") else None
+        playful = bool(d.get("playful")) if lands else None
+        if lands:   # two-tap rating: would it land? is it playful?
+            v = "Dead End" if lands == "no" else "Pass" if (lands == "yes" and playful) else "Weak"
         if v not in VERDICTS or not q("SELECT id FROM eval_items WHERE id=? AND (owner IS NULL OR owner=?)", (iid, uid), one=True): return 400, {"error": "bad rating"}
         tags = [clean(t, 20) for t in (d.get("tags") or [])[:5] if isinstance(t, str)]
-        q("INSERT OR REPLACE INTO ratings(user_id, item_id, verdict, tags, ts) VALUES(?,?,?,?,?)", (uid, iid, v, json.dumps(tags), time.time()), write=True)
-        return 200, {"ok": True}
+        q("INSERT OR REPLACE INTO ratings(user_id, item_id, verdict, tags, ts, lands, playful) VALUES(?,?,?,?,?,?,?)",
+          (uid, iid, v, json.dumps(tags), time.time(), lands, None if playful is None else int(playful)), write=True)
+        return 200, {"ok": True, "verdict": v}
     if p == "/eval/run":
         mode = d.get("mode") if d.get("mode") in ("baseline", "personal") else "baseline"
         votes = 3 if d.get("votes") == 3 else 1

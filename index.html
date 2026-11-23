@@ -58,12 +58,13 @@ input{width:100%;margin:6px 0 10px}
 .drow{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .drow:first-of-type{border-top:0}
 select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;flex:1;min-width:0}
+.card.tip{border-style:dashed;padding:10px 12px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
 .tbl th,.tbl td{text-align:left;padding:5px 4px;border-bottom:1px solid var(--line)}
 .tbl.cm td,.tbl.cm th{text-align:center}.tbl.cm td.ok{color:var(--pass);font-weight:700}
 .chip{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:4px 10px;margin:4px 4px 0 0;font-size:13px;color:var(--mut)}
 .chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
-.btn.rate{flex:1}.btn.rate.Pass{background:var(--pass);color:#06281c}.btn.rate.Weak{background:var(--weak);color:#2e1d00}.btn.rate.DeadEnd{background:var(--dead)}
+.btn.rate{flex:1}.btn.rate.dim{opacity:.35}.btn.rate.Pass{background:var(--pass);color:#06281c}.btn.rate.Weak{background:var(--weak);color:#2e1d00}.btn.rate.DeadEnd{background:var(--dead)}
 .deck{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tc{text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px}
 .tc b{display:block;font-size:14px}.tc small{display:block;color:var(--mut);margin-top:2px}
@@ -416,7 +417,7 @@ async function calibView(){
   if(location.hash!=='#calib')return;
   const done=r.runs.filter(x=>x.status==='done'),last=done[0],ready=r.rated>=20;
   const best=m=>done.find(x=>x.mode.startsWith(m));
-  let h=`<div class="card"><p style="margin-top:0">You are the ground truth. Rate replies the way <i>you</i> would react, then check how often the coach agrees. Targets: <b>≥75% agreement</b> and <b>κ ≥ 0.6</b> on held-out replies.</p>
+  let h=`<div class="card"><p style="margin-top:0">You are the ground truth. For each reply: would you want to reply, and is it playful? 👍 + playful = Pass, 👎 = Dead End, anything else = Weak. Then check how often the coach agrees. Targets: <b>≥75% agreement</b> and <b>κ ≥ 0.6</b> on held-out replies.</p>
   <div class="bar"><i style="width:${Math.round(r.rated/Math.max(1,r.items)*100)}%"></i></div><small class="note">${r.rated}/${r.items} rated${ready?'':' · rate 20 to unlock checks'}</small>
   <div class="row" style="margin-top:10px"><button class="btn" id="rgo" ${r.rated>=r.items?'disabled':''}>Rate 10 replies</button></div></div>`;
   h+=`<div class="card"><div class="k">Run a check</div><p class="note">Grades every reply you rated with the current coach (about 3 s each). Half your ratings are held out: they never go into the coach's prompt, so that number is the honest one.</p>
@@ -426,6 +427,7 @@ async function calibView(){
     const row=x=>`<tr><td>${x.mode.startsWith('personal')?'Tuned to me':'Standard'}</td><td><b>${pct(x.held_out.agreement)}</b></td><td>${x.held_out.kappa??'–'}</td><td>${x.held_out.n}</td><td>${pct(x.all.agreement)}</td><td><small>${esc(x.prompt_version)}</small></td></tr>`;
     h+=`<div class="card"><div class="k">Results</div><table class="tbl"><tr><th>Coach</th><th>Held-out agree</th><th>κ</th><th>n</th><th>All</th><th>Version</th></tr>${done.map(row).join('')}</table>`;
     const m=last.all,cm=m.confusion;
+    if(last.own&&last.own.n)h+=`<p class="note" style="margin-top:10px">Your own lines (${last.own.n}, kept out of the score because people rate their own jokes kindly): coach agreed ${pct(last.own.agreement)}.</p>`;
     h+=`<p class="note" style="margin-top:10px">Latest check: the coach was <b>stricter than you ${m.harsh}×</b> and <b>more lenient ${m.lenient}×</b>${m.harsh>m.lenient*2?' → it runs harsh':m.lenient>m.harsh*2?' → it runs soft':''}.</p>
     <table class="tbl cm"><tr><th>You ↓ / Coach →</th>${['Dead End','Weak','Pass'].map(v=>`<th>${v}</th>`).join('')}</tr>${['Dead End','Weak','Pass'].map(hv=>`<tr><th>${hv}</th>${['Dead End','Weak','Pass'].map(jv=>`<td class="${hv===jv?'ok':''}">${cm[hv][jv]}</td>`).join('')}</tr>`).join('')}</table></div>`;
     h+=`<div class="card"><div class="k">Coach used in play</div><div class="row" style="margin-top:8px"><button class="btn ${r.judge_mode==='baseline'?'':'ghost'}" id="ub">Standard</button><button class="btn ${r.judge_mode==='personal'?'':'ghost'}" id="up">Tuned to me</button></div>
@@ -448,17 +450,24 @@ async function rateView(){
   if(!RQ.length){main.innerHTML='<p class="note">Loading…</p>';try{RQ=(await api('/eval/items')).items}catch(e){main.innerHTML=`<div class="card err">${esc(e.message)}</div>`;return}}
   if(!RQ.length){main.innerHTML='<div class="card">All replies rated. 🎉</div><button class="btn ghost" id="back">← Calibration</button>';$('#back').onclick=()=>go('#calib');return}
   const it=RQ[0],tags=new Set();
-  main.innerHTML=`<p class="note">How would this reply land if <i>you</i> got it? Rate your honest reaction, not what the coach would say. ${RQ.length} left in this set.</p>
+  main.innerHTML=`<p class="note">Imagine <i>you</i> got this reply. Two quick taps, your honest reaction. ${RQ.length} left in this set.</p>
   <div class="chat">${it.context?`<div class="ctx">📍 ${esc(it.context)}</div>`:''}<div class="b them">${esc(it.them)}</div><div class="b me">${esc(it.reply)}</div></div>
   <div class="chips" id="tg">${['generic','too literal','clunky','try-hard','funny!'].map(t=>`<button class="chip" data-tag="${t}">${t}</button>`).join('')}</div>
-  <div class="row" style="margin-top:12px"><button class="btn rate Pass" data-v="Pass">Pass</button><button class="btn rate Weak" data-v="Weak">Weak</button><button class="btn rate DeadEnd" data-v="Dead End">Dead End</button></div>
+  <div id="q1"><div class="k" style="margin-top:12px">1. Would you want to reply to this?</div><div class="row" style="margin-top:6px"><button class="btn rate Pass" data-l="yes">👍 Yes</button><button class="btn rate Weak" data-l="meh">😐 Meh</button><button class="btn rate DeadEnd" data-l="no">👎 No</button></div></div>
+  <div id="q2" hidden><div class="k" style="margin-top:12px">2. Is it playful or flirty?</div><div class="row" style="margin-top:6px"><button class="btn rate Pass" data-p="1">😏 Yes</button><button class="btn rate Weak" data-p="0">Just friendly / flat</button></div></div>
   <button class="btn ghost sm" id="back" style="margin-top:14px">← Calibration</button>`;
   main.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{const t=b.dataset.tag;tags.has(t)?tags.delete(t):tags.add(t);b.classList.toggle('on')});
-  main.querySelectorAll('[data-v]').forEach(b=>b.onclick=async()=>{
-    main.querySelectorAll('[data-v]').forEach(x=>x.disabled=true);
-    try{await api('/eval/rate',{item_id:it.id,verdict:b.dataset.v,tags:[...tags]});RQ.shift();rateView()}
-    catch(e){alert('Could not save: '+e.message);main.querySelectorAll('[data-v]').forEach(x=>x.disabled=false)}
+  let lands=null;
+  const save=async playful=>{
+    main.querySelectorAll('[data-l],[data-p]').forEach(x=>x.disabled=true);
+    try{await api('/eval/rate',{item_id:it.id,lands,playful,tags:[...tags]});RQ.shift();rateView()}
+    catch(e){alert('Could not save: '+e.message);main.querySelectorAll('[data-l],[data-p]').forEach(x=>x.disabled=false)}
+  };
+  main.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{
+    lands=b.dataset.l;main.querySelectorAll('[data-l]').forEach(x=>x.classList.toggle('dim',x!==b));
+    if(lands==='no')save(false);else{$('#q2').hidden=false;$('#q2').scrollIntoView({block:'nearest'})}
   });
+  main.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>save(b.dataset.p==='1'));
   $('#back').onclick=()=>{RQ=[];go('#calib')};
 }
 
@@ -545,6 +554,11 @@ function card(j){
   $('#res').insertAdjacentHTML('beforeend',`<div class="card verdict ${k}"><div class="vh"><b>${esc(j.verdict)}</b><span class="note">${j.technique&&j.technique!=='none'?esc(techName(j.technique))+' · ':''}${j.score}/100</span></div><div>${esc(j.diagnosis)}</div>${(j.rewrites||[]).map(r=>typeof r==='string'?`<div class="rw">💡 ${esc(r)}</div>`:`<div class="rw"><small class="k">${esc(r.technique)}</small><br>💡 ${esc(r.line)}</div>`).join('')}<div class="chips">${(j.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div></div>`);
   main.scrollTop=main.scrollHeight;
 }
+function retryHint(){
+  const t=cur.challenge&&TECHS.find(x=>x.id===cur.challenge);
+  if(t)return `<div class="card tip"><div class="k">🎯 Retry with ${esc(t.name)}</div><p style="margin:4px 0 0">${esc(t.how)}</p>${t.ex&&t.ex[0]?`<p class="note" style="margin:6px 0 0">e.g. ${esc(t.ex[0])}</p>`:''}</div>`;
+  return `<div class="card tip"><div class="k">Retry the same text</div><p style="margin:4px 0 0">${esc(HINTS[cur.stage])}</p></div>`;
+}
 function plainTurn(pass){
   const n=cur.stage;
   if(pass){
@@ -553,7 +567,7 @@ function plainTurn(pass){
     $('#nx').onclick=()=>{cur=null;go('#home')};$('#fr').onclick=()=>playGen(n);$('#bk').onclick=()=>{cur=null;go('#stage/'+n)};
     foot.hidden=true;
   }else{
-    $('#res').insertAdjacentHTML('beforeend',`<div class="note">Retry the same text. ${HINTS[n]}</div>`);
+    $('#res').insertAdjacentHTML('beforeend',retryHint());
     cur.thread=cur.thread.slice(0,1);
     document.querySelectorAll('.b.me').forEach(b=>b.style.opacity=.45);
   }
