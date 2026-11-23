@@ -55,6 +55,14 @@ textarea,input{background:var(--panel);color:var(--ink);border:1px solid var(--l
 textarea{flex:1;resize:none;max-height:110px}
 input{width:100%;margin:6px 0 10px}
 .err{color:var(--dead)}
+.deck{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tc{text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px}
+.tc b{display:block;font-size:14px}.tc small{display:block;color:var(--mut);margin-top:2px}
+.tc .tx{font-style:italic;margin-top:4px}.tc .tm{display:block;margin-top:6px;font-size:12px;color:var(--mut)}
+.tc.mastered{border-color:var(--pass)}.tc.mastered b{color:var(--pass)}.tc.tried{border-color:var(--weak)}
+.tc.lock{opacity:.45;cursor:not-allowed}
+.tag.ch{background:#3a2f12;color:#ffe2a8;border-color:#3a2f12}
+@media (max-width:380px){.deck{grid-template-columns:1fr}}
 .sk{display:grid;grid-template-columns:110px 1fr 38px;gap:8px;align-items:center;margin:6px 0;font-size:14px}
 .sk .bar{margin:0;height:8px}.sk .bar i{background:var(--acc)}
 .sk em{font-style:normal;color:var(--mut);text-align:right}
@@ -99,7 +107,11 @@ const STAGES=[
    ['Just got back from the gym, my legs are jelly','interviewing','You matched yesterday and texted "how\'s your day going?" an hour ago.'],
    ['Binge-watching a baking show instead of doing laundry','advice',"It's Friday night, a few days into texting. You asked what they're up to."],
    ['I need like three alarms to get up in the morning, it\'s embarrassing','agreeing',"You mentioned you're an early riser. This is their reply."],
-   ['My dog just stole my sandwich off the counter and he is not sorry','interviewing','Their profile is full of photos of their golden retriever. You asked how lunch was.']],
+   ['My dog just stole my sandwich off the counter and he is not sorry','interviewing','Their profile is full of photos of their golden retriever. You asked how lunch was.'],
+   ['wow so you\'re one of those people who replies instantly huh','agreeing','You replied to their message within a minute. They tease you first.'],
+   ['haha nice','interviewing','You sent a long story about your neighbour\'s rooster waking you up at 4am. This is all they sent back.'],
+   ['so what do you do for work?','too literal','You matched yesterday and have been chatting about weekend plans. They ask you a question.'],
+   ['you probably say that to everyone lol','clunky','You told them their profile was the funniest one you\'ve seen this week.']],
   boss:'I swear I\'m a great cook, I just burn everything. Last night was a smoke alarm situation',bossCtx:'A few days in, you asked if they cook.'},
  {n:2,name:'The Frame',sub:'Create "us" energy: hypotheticals, compatibility tests, specific compliments.',
   rules:'Put the two of you in a scenario. Be specific. No generic "you\'re so pretty".',
@@ -108,7 +120,11 @@ const STAGES=[
    ['I\'m weirdly competitive at board games, fair warning','too literal','You mentioned your friends have a game night this weekend.'],
    ['Honestly I\'d live on tacos if I could','agreeing','You asked about their go-to comfort food.'],
    ['I always get the window seat on planes, non-negotiable','interviewing',"You've been comparing travel habits."],
-   ['I\'m the friend who gets everyone lost on road trips','advice','You said road trips are your favourite kind of holiday.']],
+   ['I\'m the friend who gets everyone lost on road trips','advice','You said road trips are your favourite kind of holiday.'],
+   ['ok your taste in music is actually elite, i\'m impressed','agreeing','You sent them a song from your road-trip playlist. They compliment you.'],
+   ['lol','interviewing','You\'ve been texting for a few days and just joked that pineapple pizza is a personality test. This is all they sent.'],
+   ['so are you a morning person or a night owl','too literal','You\'ve been comparing habits for a few days. They ask you a question.'],
+   ['i bet you\'re the friend who always cancels plans last minute','clunky','You mentioned you love making plans with friends. They tease you first.']],
   boss:'Okay settle this: pineapple on pizza, yes or no? Be careful, I\'m judging you',bossCtx:"You've been teasing each other about food opinions all week."},
  {n:3,name:'The Close',sub:'Turn banter into a confident, low-pressure invitation.',
   rules:'Specific, easy to say yes to, not hesitant, not needy. Say something they can answer.',
@@ -117,7 +133,11 @@ const STAGES=[
    ['This thread is the best part of my day, no pressure lol','clunky',"You've had a long, fun back-and-forth all afternoon."],
    ['Ugh I need to get out of the house this weekend. Any ideas?','advice',"It's Thursday. You've been texting for about a week."],
    ['That coffee place you mentioned sounds amazing','interviewing','Yesterday you mentioned a coffee spot you love near your work.'],
-   ['We should probably stop texting and just prove we\'re this funny in real life','try-hard',"You've been roasting each other for an hour."]],
+   ['We should probably stop texting and just prove we\'re this funny in real life','try-hard',"You've been roasting each other for an hour."],
+   ['haha you\'re trouble','try-hard','A week of good banter. You just joked about stealing their fries if you ever ate together.'],
+   ['so when are you going to stop bragging about that taco place and actually prove it','hesitant','You keep bragging that you know the best taco place in town. They call you on it.'],
+   ['honestly i\'m free saturday, just saying','hesitant','A week of texting. You mentioned wanting to try the new bowling alley downtown.'],
+   ['haha ok','hesitant','You\'ve been texting for a week. You just asked if they\'ve ever been to the night market.']],
   boss:'Okay the banter is strong. Now I\'m curious if you\'re this good in person',bossCtx:'A week of strong banter. They just sent this.'}
 ];
 const HINTS={1:'Accuse them of something absurd. Exaggerate. Flip the blame.',2:'Drop both of you into a tiny scenario ("we\'d…").',3:'Name a place and a time, keep it light.'};
@@ -126,8 +146,17 @@ const SKILLS=[
  {id:'noint',name:'No interviews',flags:['interviewing'],why:'asked interview questions'},
  {id:'noadv',name:'No advice',flags:['advice'],why:'gave advice'},
  {id:'cal',name:'Calibration',flags:['thirsty','try-hard'],why:'came on too strong or tried too hard'},
- {id:'conf',name:'Confidence',flags:['bailed','clunky','borrowed'],why:'bailed, got clunky or borrowed the coach\'s lines'}];
+ {id:'conf',name:'Confidence',flags:['bailed','clunky','borrowed','hesitant'],why:'bailed, hedged, got clunky or borrowed the coach\'s lines'},
+ {id:'fresh',name:'Freshness',flags:['repetitive','stale'],why:'repeated the same move or used a worn-out template'}];
 const skillOf=f=>SKILLS.find(s=>s.flags.includes(f));
+let TECHS=[];  // technique library, loaded from /techniques
+const techName=id=>(TECHS.find(t=>t.id===id)||{}).name||id;
+const MASTER=3; // passes with a technique to master it
+function techStats(){
+  return TECHS.map(t=>{const a=A.filter(x=>x.technique===t.id);const p=a.filter(x=>x.verdict==='Pass').length;
+    return{...t,used:a.length,passes:p,status:p>=MASTER?'mastered':a.length?'tried':'unseen',locked:!unlocked(t.stage)}});
+}
+function rangeScore(){const r=A.slice(0,15);if(r.length<3)return null;const d=new Set(r.filter(a=>a.verdict==='Pass'&&a.technique&&a.technique!=='none').map(a=>a.technique));return Math.min(100,Math.round(d.size/6*100))}
 
 /* ---------- state ---------- */
 let TOKEN=ls.get('bc_token'),NAME=ls.get('bc_name'),P=null,A=[];   // progress, attempts (newest first)
@@ -171,13 +200,25 @@ function mastery(){
     if(recent.length<3)return{...s,m:null,hits:0};
     let t=0,hits=0;for(const a of recent){const bad=(a.flags||[]).some(f=>s.flags.includes(f));if(bad)hits++;t+=bad?0:a.verdict==='Pass'?100:60}
     return{...s,m:Math.round(t/recent.length),hits};
-  });
+  }).concat(TECHS.length?[{id:'range',name:'Range',flags:[],m:rangeScore(),hits:0}]:[]);
+}
+function randText(n){const sc=STAGES[n-1].sc,un=sc.map((s,i)=>i).filter(i=>!passedOf(n).includes(coreKey(n,i)));const pool=un.length?un:sc.map((s,i)=>i);return scen(n,pool[Math.floor(Math.random()*pool.length)])}
+function challengeFor(id){const t=TECHS.find(x=>x.id===id),top=[3,2,1].find(unlocked);const n=t.stage>1?t.stage:Math.min(top,2);return{...randText(n),challenge:id}}
+function stuckTechnique(){ // same technique in 3+ of the last 8 passes?
+  const c={};A.filter(a=>a.verdict==='Pass'&&!a.rally_id&&a.technique&&a.technique!=='none').slice(0,8).forEach(a=>c[a.technique]=(c[a.technique]||0)+1);
+  const top=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];return top&&top[1]>=3?top[0]:null;
 }
 function nextDrill(){
   const top=[3,2,1].find(unlocked);
   // 1. rally ready?
   for(const n of [1,2,3])if(unlocked(n)&&!P.rally[n]&&passedOf(n).length>=NEED)return{type:'rally',stage:n,reason:`You have ${NEED} passes in Stage ${n}. Beat the rally to unlock the next stage.`};
-  const ms=mastery().filter(s=>s.m!==null).sort((a,b)=>a.m-b.m);
+  // 2. stuck on one technique? challenge a new one
+  const stuck=TECHS.length&&stuckTechnique();
+  if(stuck){
+    const opts=techStats().filter(t=>!t.locked&&t.status!=='mastered'&&t.id!==stuck),fresh=opts.filter(t=>t.status==='unseen'),pick=(fresh.length?fresh:opts)[Math.floor(Math.random()*(fresh.length||opts.length))];
+    if(pick)return{type:'core',s:challengeFor(pick.id),reason:`You keep reaching for ${techName(stuck)}. Try ${pick.name}: ${pick.how}`};
+  }
+  const ms=mastery().filter(s=>s.m!==null&&s.flags.length).sort((a,b)=>a.m-b.m);
   const weak=ms.length&&ms[0].m<85?ms[0]:null;
   const st=STAGES[top-1];
   const unpassed=st.sc.map((s,i)=>i).filter(i=>!passedOf(top).includes(coreKey(top,i)));
@@ -237,18 +278,19 @@ function checkSrv(){fetch(API+'/health').then(r=>r.json()).then(()=>{const s=$('
 function logout(expired){if(TOKEN)fetch(API+'/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{});TOKEN=null;ls.del('bc_token');P=null;A=[];cur=null;hud();if(location.hash!=='#login')location.hash='#login';login(expired?'Session expired. Log in again.':'')}
 async function refresh(){if(!TOKEN)return;const j=await api('/me');P=j.progress;A=j.attempts;NAME=j.name}
 
+const skillRow=s=>`<div class="sk"><span>${s.name}</span><div class="bar"><i style="width:${s.m??0}%"></i></div><em>${s.m??'–'}</em></div>`;
 /* ---------- home (dynamic) ---------- */
 function home(){
   cur=null;$('#ttl').textContent='Banter Coach';hud();
   const d=nextDrill();
   let h=`<button class="card hero" id="nd"><div class="k">Next drill</div><b style="display:block;margin:4px 0">${
-    d.type==='rally'?'⚔ Stage '+d.stage+' rally':d.type==='gen'?'✨ Fresh Stage '+d.stage+' text':'"'+esc(d.s.text.slice(0,70))+(d.s.text.length>70?'…':'')+'"'}</b><small class="note">${esc(d.reason)}</small></button>`;
+    d.type==='rally'?'⚔ Stage '+d.stage+' rally':d.type==='gen'?'✨ Fresh Stage '+d.stage+' text':(d.s.challenge?'🎯 Use: '+esc(techName(d.s.challenge))+'<br>':'')+'"'+esc(d.s.text.slice(0,70))+(d.s.text.length>70?'…':'')+'"'}</b><small class="note">${esc(d.reason)}</small></button>`;
   for(const st of STAGES){
     const n=st.n,dn=passedOf(n).length,lock=!unlocked(n);
     h+=`<button class="card stage ${lock?'lock':''}" data-s="${n}"><span class="num">${lock?'🔒':P.rally[n]?'✓':n}</span><span style="flex:1"><b>${st.name}</b><small>${lock?'Win the Stage '+(n-1)+' rally to unlock.':st.sub}</small><div class="bar"><i style="width:${Math.min(100,dn/NEED*100)}%"></i></div><small>${dn}/${NEED} passes${P.rally[n]?' · rally cleared':''}</small></span></button>`;
   }
   const ms=mastery();
-  h+=`<button class="card" id="st"><div class="k">Skills</div>${ms[0].m===null?'<p class="note">Play 3 texts to see your skill bars.</p>':ms.map(s=>`<div class="sk"><span>${s.name}</span><div class="bar"><i style="width:${s.m}%"></i></div><em>${s.m}</em></div>`).join('')}<small class="note">Tap for stats and history →</small></button>`;
+  h+=`<button class="card" id="st"><div class="k">Skills</div>${ms[0].m===null?'<p class="note">Play 3 texts to see your skill bars.</p>':ms.map(skillRow).join('')}<small class="note">Tap for stats and history →</small></button>`;
   if(!TOKEN)h+=`<p class="note">Playing as guest. <a href="#login">Log in or create a profile</a> to save across devices.</p>`;
   main.innerHTML=h;
   $('#nd').onclick=()=>d.type==='rally'?rally(d.stage):d.type==='gen'?playGen(d.stage,d.trap):play(d.s);
@@ -270,6 +312,11 @@ function stageView(n){
 }
 
 /* ---------- stats ---------- */
+function deckCard(){
+  if(!TECHS.length)return '';
+  const ts=techStats(),m=ts.filter(t=>t.status==='mastered').length;
+  return `<div class="card"><div class="k">Technique deck · ${m}/${ts.length} mastered</div><p class="note">Pass ${MASTER}× with a technique to master it. Tap one to practise it.</p><div class="deck">${ts.map(t=>`<button class="tc ${t.status} ${t.locked?'lock':''}" ${t.locked?'disabled':''} data-t="${t.id}"><b>${t.status==='mastered'?'★ ':''}${esc(t.name)}</b><small>${t.locked?'Unlocks in Stage '+t.stage:esc(t.how)}</small>${!t.locked&&t.status==='unseen'?`<small class="tx">${esc(t.ex[0])}</small>`:''}<span class="tm">${t.passes}/${MASTER} passes · used ${t.used}</span></button>`).join('')}</div></div>`;
+}
 function stats(){
   $('#ttl').textContent='Stats';hud();
   const pr=n=>{const a=A.filter(x=>x.stage===n&&!x.rally_id);return a.length?Math.round(a.filter(x=>x.verdict==='Pass').length/a.length*100)+'%':'–'};
@@ -283,11 +330,13 @@ function stats(){
   let h=`<div class="card"><div class="grid3"><div><b>${level()}</b><small class="note">level</small></div><div><b>${P.passes}/${P.tries}</b><small class="note">passes</small></div><div><b>${P.best}</b><small class="note">best streak</small></div></div></div>
   <div class="card"><div class="k">Pass rate by stage</div><div class="grid3" style="margin-top:6px">${[1,2,3].map(n=>`<div><b>${pr(n)}</b><small class="note">Stage ${n}</small></div>`).join('')}</div></div>
   <div class="card"><div class="k">Score trend</div>${spark}</div>
-  <div class="card"><div class="k">Skills (last 10 replies)</div>${ms[0].m===null?'<p class="note">Play 3 texts first.</p>':ms.map(s=>`<div class="sk"><span>${s.name}</span><div class="bar"><i style="width:${s.m}%"></i></div><em>${s.m}</em></div>`).join('')}</div>
+  <div class="card"><div class="k">Skills (last 10 replies)</div>${ms[0].m===null?'<p class="note">Play 3 texts first.</p>':ms.map(skillRow).join('')}</div>
+  ${deckCard()}
   <div class="card"><div class="k">Your top habits</div>${habits.length?habits.map(([f,o])=>`<p style="margin:8px 0 0"><b>${esc(f)}</b> ×${o.n}<br><small class="note">e.g. "${esc(o.ex)}"</small></p>`).join(''):'<p class="note">None yet. Suspicious.</p>'}</div>
-  <div class="card"><div class="k">History</div>${A.length?A.slice(0,50).map(a=>`<details><summary><span class="v ${a.verdict.replace(' ','')}">${esc(a.verdict)}</span><span class="ell">${esc(a.reply)}</span><small class="note">${a.score}</small></summary><p class="note" style="margin:6px 0">${a.rally_id?'<span class="tag boss">rally</span>':''}${(a.scenario_key||'').startsWith('gen:')?'<span class="tag gen">fresh</span>':''} Them: "${esc(a.them_text)}"</p><div style="font-size:14px">${esc(a.diagnosis)}</div><div class="chips">${(a.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div><small class="note">${new Date(a.ts*1000).toLocaleString()}</small></details>`).join(''):'<p class="note">No attempts yet.</p>'}</div>
+  <div class="card"><div class="k">History</div>${A.length?A.slice(0,50).map(a=>`<details><summary><span class="v ${a.verdict.replace(' ','')}">${esc(a.verdict)}</span><span class="ell">${esc(a.reply)}</span><small class="note">${a.score}</small></summary><p class="note" style="margin:6px 0">${a.rally_id?'<span class="tag boss">rally</span>':''}${(a.scenario_key||'').startsWith('gen:')?'<span class="tag gen">fresh</span>':''}${a.technique&&a.technique!=='none'?'<span class="tag">'+esc(techName(a.technique))+'</span>':''} Them: "${esc(a.them_text)}"</p><div style="font-size:14px">${esc(a.diagnosis)}</div><div class="chips">${(a.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div><small class="note">${new Date(a.ts*1000).toLocaleString()}</small></details>`).join(''):'<p class="note">No attempts yet.</p>'}</div>
   <div class="row"><button class="btn ghost" id="back">← Home</button>${TOKEN?'<button class="btn ghost" id="lo">Log out</button>':'<button class="btn ghost" id="rst">Reset guest progress</button>'}</div>`;
   main.innerHTML=h;
+  main.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>play(challengeFor(b.dataset.t)));
   $('#back').onclick=()=>go('#home');
   if(TOKEN)$('#lo').onclick=()=>logout();
   else $('#rst').onclick=()=>{if(confirm('Reset guest progress?')){P=newP();A=[];saveGuest();go('#home')}};
@@ -305,7 +354,8 @@ function shell(title,tags){
 }
 function play(s){
   cur={...s,thread:[{who:'them',t:s.text}],boss:false,busy:false};
-  shell('Stage '+s.stage,`<span class="tag">Stage ${s.stage}</span>${s.key.startsWith('gen:')?'<span class="tag gen">fresh</span>':''}${esc(STAGES[s.stage-1].rules)}`);
+  const ct=s.challenge&&TECHS.find(t=>t.id===s.challenge);
+  shell('Stage '+s.stage,`<span class="tag">Stage ${s.stage}</span>${s.key.startsWith('gen:')?'<span class="tag gen">fresh</span>':''}${ct?`<span class="tag ch">🎯 Use: ${esc(ct.name)}</span> ${esc(ct.how)}`:esc(STAGES[s.stage-1].rules)}`);
   ctxLine(s.ctx);bubble('them',s.text);
 }
 async function playGen(n,trap){
@@ -328,9 +378,9 @@ async function submit(){
   bubble('me',t);
   const ty=bubble('them','coach is reading…','typing');
   try{
-    const j=await api('/judge',{stage:cur.stage,key:cur.key,context:cur.ctx,help_shown:cur.help||[],thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined});
+    const j=await api('/judge',{stage:cur.stage,key:cur.key,context:cur.ctx,help_shown:cur.help||[],challenge:cur.challenge,recent:A.slice(0,6).map(a=>a.reply),thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined});
     cur.thread.push({who:'me',t});ty.remove();$('#helpbox').innerHTML='';cur.help=[];
-    const rec={ts:Date.now()/1000,stage:cur.stage,scenario_key:cur.key,them_text:[...cur.thread].reverse().find(m=>m.who==='them').t,reply:t,verdict:j.verdict,score:j.score,flags:j.flags,diagnosis:j.diagnosis,rally_id:cur.boss?cur.rid:null};
+    const rec={ts:Date.now()/1000,stage:cur.stage,scenario_key:cur.key,them_text:[...cur.thread].reverse().find(m=>m.who==='them').t,reply:t,verdict:j.verdict,score:j.score,flags:j.flags,diagnosis:j.diagnosis,rally_id:cur.boss?cur.rid:null,technique:j.technique,challenge:cur.challenge||null};
     A.unshift(rec);
     if(j.progress)P=j.progress;else{applyAttempt(cur.stage,cur.boss?null:cur.key,j.verdict);saveGuest()}
     card(j);hud();
@@ -343,7 +393,7 @@ async function submit(){
 }
 function card(j){
   const k=j.verdict.replace(' ','');
-  $('#res').insertAdjacentHTML('beforeend',`<div class="card verdict ${k}"><div class="vh"><b>${esc(j.verdict)}</b><span class="note">${j.score}/100</span></div><div>${esc(j.diagnosis)}</div>${(j.rewrites||[]).map(r=>`<div class="rw">💡 ${esc(r)}</div>`).join('')}<div class="chips">${(j.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div></div>`);
+  $('#res').insertAdjacentHTML('beforeend',`<div class="card verdict ${k}"><div class="vh"><b>${esc(j.verdict)}</b><span class="note">${j.technique&&j.technique!=='none'?esc(techName(j.technique))+' · ':''}${j.score}/100</span></div><div>${esc(j.diagnosis)}</div>${(j.rewrites||[]).map(r=>typeof r==='string'?`<div class="rw">💡 ${esc(r)}</div>`:`<div class="rw"><small class="k">${esc(r.technique)}</small><br>💡 ${esc(r.line)}</div>`).join('')}<div class="chips">${(j.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div></div>`);
   main.scrollTop=main.scrollHeight;
 }
 function plainTurn(pass){
@@ -382,9 +432,9 @@ async function showHelp(){
   if(box.innerHTML){box.innerHTML='';return}
   cur.helpBusy=true;box.innerHTML='<div class="card note">Coach is thinking…</div>';
   try{
-    const j=await api('/help',{stage:cur.stage,context:cur.ctx,thread:cur.thread});
-    cur.help=(cur.help||[]).concat(j.examples.map(e=>e.line));
-    box.innerHTML=`<div class="card"><div class="vh"><span class="k">Coach help</span><button class="btn ghost sm" id="hx" aria-label="Close help">✕</button></div><div style="font-size:14px">${esc(j.tip)}</div>${j.examples.map(e=>`<div class="ex"><small>${esc(e.technique)}</small>${esc(e.line)}</div>`).join('')}<p class="note" style="margin-bottom:0">Find your own angle. Copying these lines caps you at Weak.</p></div>`;
+    const j=await api('/help',{stage:cur.stage,context:cur.ctx,thread:cur.thread,used:A.slice(0,30).map(a=>a.technique).filter(Boolean),exclude:cur.lastHelp||[]});
+    cur.help=(cur.help||[]).concat(j.examples.map(e=>e.line));cur.lastHelp=j.examples.map(e=>e.id).filter(Boolean);
+    box.innerHTML=`<div class="card"><div class="vh"><span class="k">Coach help</span><button class="btn ghost sm" id="hx" aria-label="Close help">✕</button></div><div style="font-size:14px">${esc(j.tip)}</div>${j.examples.map(e=>`<div class="ex" title="${esc(e.how||'')}"><small>${esc(e.technique)}</small>${esc(e.line)}</div>`).join('')}<p class="note" style="margin-bottom:0">Find your own angle. Copying these lines caps you at Weak.</p></div>`;
     $('#hx').onclick=()=>{box.innerHTML=''};
   }catch(e){box.innerHTML=`<div class="card note">${esc(HINTS[cur.stage])}<br><span class="err">(coach offline: ${esc(e.message)})</span></div>`}
   if(cur)cur.helpBusy=false;
@@ -396,6 +446,8 @@ $('#who').onclick=()=>go('#stats');
 
 /* ---------- boot ---------- */
 (async()=>{
+  try{const c=JSON.parse(ls.get('bc_techs')||'null');if(c)TECHS=c}catch(e){}
+  try{const r=await fetch(API+'/techniques');TECHS=(await r.json()).techniques||TECHS;ls.set('bc_techs',JSON.stringify(TECHS))}catch(e){}
   if(TOKEN){
     main.innerHTML='<p class="note">Loading your profile…</p>';
     try{await refresh();}catch(e){
