@@ -41,9 +41,14 @@ MATCH = """You play the person the user is texting, in a casual dating-app text 
 GEN = """You write ONE realistic incoming text message from a dating-app match, for a banter training game.
 Stage %d (%s). The text should naturally tempt the player into this mistake: %s.
 Make it casual, specific and a bit funny, 6-25 words, lowercase-ish like a real text, with a concrete detail (food, show, pet, chore, plan...).
+It must fit the stage. Example for this stage: %s
 Do not repeat or closely paraphrase any of these: %s
-Respond ONLY with JSON {"text": "..."}"""
+Also write "context": ONE short sentence in second person setting the scene from the player's side (how long you've been texting, what the player just said or asked), e.g. "You matched yesterday and asked what they're up to tonight." It must make the text make sense.
+Respond ONLY with JSON {"context": "...", "text": "..."}"""
 STAGE_NAMES = {1: "The Pivot: they mention something mundane", 2: "The Frame: they share a preference or plan the player could build a shared scenario around", 3: "The Close: banter has peaked and the player should suggest meeting up"}
+GEN_EX = {1: '{"context": "You matched yesterday and asked how their day is going.", "text": "just survived a 3 hour meeting that could have been an email, send snacks"}',
+          2: '{"context": "A few days of good banter. You asked about their ideal weekend.", "text": "honestly a farmers market, way too many pastries, then a nap. i take naps very seriously"}',
+          3: '{"context": "You have texted daily for a week and the banter has been great, but you have not met.", "text": "ok this new ramen place opened near me and i refuse to go alone like a loser"}'}
 TRAPS = {"interviewing": "asking a boring follow-up question", "advice": "giving practical advice", "agreeing": "just agreeing or saying same",
          "thirsty": "escalating too fast or inviting themselves over", "too literal": "answering literally", "try-hard": "a forced joke or pickup line",
          "pun only": "a weak pun", "clunky": "an overcomplicated joke", "bailed": "freezing and not replying", "hesitant": "a hesitant, over-qualified invitation"}
@@ -123,7 +128,7 @@ SCHEMA = {"type": "object", "additionalProperties": False,
     "score": {"type": "integer"}, "diagnosis": {"type": "string"},
     "rewrites": {"type": "array", "items": {"type": "string"}},
     "flags": {"type": "array", "items": {"type": "string", "enum": FLAGS}}}}
-GSCHEMA = {"type": "object", "additionalProperties": False, "required": ["text"], "properties": {"text": {"type": "string"}}}
+GSCHEMA = {"type": "object", "additionalProperties": False, "required": ["context", "text"], "properties": {"context": {"type": "string"}, "text": {"type": "string"}}}
 
 def clean(s, n=MAXLEN):
     return re.sub(r"\s+", " ", str(s))[:n].strip()
@@ -138,7 +143,8 @@ def judge_llm(d):
     stage = int(d.get("stage", 1))
     thread = [("THEM: " if m.get("who") == "them" else "USER: ") + clean(m.get("t", ""))
               for m in d.get("thread", [])[-8:] if isinstance(m, dict) and clean(m.get("t", ""))]
-    prompt = ("Stage %d.\nThread so far (oldest first):\n%s\n\nJudge ONLY the user's LAST text: %s" % (stage, "\n".join(thread), reply))
+    ctx = clean(d.get("context", ""), 300)
+    prompt = (("Situation: %s\n" % ctx if ctx else "") + "Stage %d.\nThread so far (oldest first):\n%s\n\nJudge ONLY the user's LAST text: %s" % (stage, "\n".join(thread), reply))
     if d.get("rally"):
         prompt += "\nThis is a multi-turn rally: judge it against the whole thread so far, and whether the user is sustaining the bit without retreating to safe questions."
     j = json.loads(llm([{"role": "system", "content": COACH}, {"role": "user", "content": prompt}], SCHEMA))
@@ -148,7 +154,8 @@ def judge_llm(d):
     return j
 
 def reply_llm(d):
-    msgs = [{"role": "system", "content": MATCH}]
+    ctx = clean(d.get("context", ""), 300)
+    msgs = [{"role": "system", "content": MATCH + ("\nSituation (from the user's side): " + ctx if ctx else "")}]
     for m in d.get("thread", [])[-8:]:
         msgs.append({"role": "assistant" if m.get("who") == "them" else "user", "content": clean(m.get("t", ""))})
     return {"text": clean(llm(msgs, None, 0.9, 150), 300)}
@@ -161,11 +168,11 @@ def generate(d, uid):
     if uid:
         seen += [r["them_text"] for r in q("SELECT them_text FROM attempts WHERE user_id=? AND source='gen' ORDER BY ts DESC LIMIT 15", (uid,))]
     for _ in range(3):
-        t = clean(json.loads(llm([{"role": "user", "content": GEN % (stage, STAGE_NAMES[stage], TRAPS[trap], json.dumps(seen[-25:]))}],
-                                 GSCHEMA, 1.0, 200))["text"], 220)
+        g = json.loads(llm([{"role": "user", "content": GEN % (stage, STAGE_NAMES[stage], TRAPS[trap], GEN_EX[stage], json.dumps(seen[-25:]))}], GSCHEMA, 1.0, 300))
+        t, cx = clean(g["text"], 220), clean(g["context"], 200)
         if 8 <= len(t) <= 200 and t not in seen:
             recent_gen.append(t); del recent_gen[:-50]
-            return {"text": t, "trap": trap, "key": "gen:" + hashlib.sha1(t.encode()).hexdigest()[:10]}
+            return {"text": t, "context": cx, "trap": trap, "key": "gen:" + hashlib.sha1(t.encode()).hexdigest()[:10]}
     raise ValueError("generation failed")
 
 # ---------------- handlers ----------------

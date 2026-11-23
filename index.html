@@ -35,6 +35,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .b.them{background:var(--them);align-self:flex-start;border-bottom-left-radius:5px}
 .b.me{background:var(--me);color:#fff;align-self:flex-end;border-bottom-right-radius:5px}
 .b.typing{color:var(--mut)}
+.ctx{align-self:center;text-align:center;font-size:13px;color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:6px 12px;max-width:92%}
 @keyframes pop{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
 .note{font-size:13px;color:var(--mut);margin:4px 0 8px}
 .verdict{border-left:5px solid var(--mut)}
@@ -83,37 +84,37 @@ const API=ls.get('bc_api')||'https://notified-tenant-cyber-sunny.trycloudflare.c
 const NEED=3;
 
 /* ---------- content ---------- */
-// each core text: [text, trap it baits]
+// each core text: [text, trap it baits, context]
 const STAGES=[
  {n:1,name:'The Pivot',sub:'Stop agreeing, advising, interviewing. Tease, exaggerate.',
   rules:'No safe small talk, no interview questions, no tips, no "same".',
-  sc:[['Honestly just surviving on iced coffee and spreadsheets at this point lol','advice'],
-   ['Nothing crazy, probably just going to rot on my couch and rewatch The Office for the millionth time','agreeing'],
-   ['Attempted homemade pasta from scratch and honestly my kitchen looks like a crime scene right now','thirsty'],
-   ['Woke up at noon and currently debating if cereal counts as a real lunch','agreeing'],
-   ['Just got back from the gym, my legs are jelly','interviewing'],
-   ['Binge-watching a baking show instead of doing laundry','advice'],
-   ['I need like three alarms to get up in the morning, it\'s embarrassing','agreeing'],
-   ['My dog just stole my sandwich off the counter and he is not sorry','interviewing']],
-  boss:'I swear I\'m a great cook, I just burn everything. Last night was a smoke alarm situation'},
+  sc:[['Honestly just surviving on iced coffee and spreadsheets at this point lol','advice','You matched two days ago, swapped a couple of basic texts, and just asked how their week is going.'],
+   ['Nothing crazy, probably just going to rot on my couch and rewatch The Office for the millionth time','agreeing',"You've been texting casually for a day and asked what they're up to tonight."],
+   ['Attempted homemade pasta from scratch and honestly my kitchen looks like a crime scene right now','thirsty',"You're chatting about weekend plans. They said they're getting back into cooking, so you asked what they're making."],
+   ['Woke up at noon and currently debating if cereal counts as a real lunch','agreeing',"It's Sunday. You asked how their morning is going."],
+   ['Just got back from the gym, my legs are jelly','interviewing','You matched yesterday and texted "how\'s your day going?" an hour ago.'],
+   ['Binge-watching a baking show instead of doing laundry','advice',"It's Friday night, a few days into texting. You asked what they're up to."],
+   ['I need like three alarms to get up in the morning, it\'s embarrassing','agreeing',"You mentioned you're an early riser. This is their reply."],
+   ['My dog just stole my sandwich off the counter and he is not sorry','interviewing','Their profile is full of photos of their golden retriever. You asked how lunch was.']],
+  boss:'I swear I\'m a great cook, I just burn everything. Last night was a smoke alarm situation',bossCtx:'A few days in, you asked if they cook.'},
  {n:2,name:'The Frame',sub:'Create "us" energy: hypotheticals, compatibility tests, specific compliments.',
   rules:'Put the two of you in a scenario. Be specific. No generic "you\'re so pretty".',
-  sc:[['I\'m the type who always has a playlist for every mood lol','interviewing'],
-   ['Planning a trip to Japan next year, I have 47 tabs open','advice'],
-   ['I\'m weirdly competitive at board games, fair warning','too literal'],
-   ['Honestly I\'d live on tacos if I could','agreeing'],
-   ['I always get the window seat on planes, non-negotiable','interviewing'],
-   ['I\'m the friend who gets everyone lost on road trips','advice']],
-  boss:'Okay settle this: pineapple on pizza, yes or no? Be careful, I\'m judging you'},
+  sc:[['I\'m the type who always has a playlist for every mood lol','interviewing',"The banter's been good for a few days. You mentioned your commute playlist is all 2000s pop."],
+   ['Planning a trip to Japan next year, I have 47 tabs open','advice','You asked if they have any trips coming up.'],
+   ['I\'m weirdly competitive at board games, fair warning','too literal','You mentioned your friends have a game night this weekend.'],
+   ['Honestly I\'d live on tacos if I could','agreeing','You asked about their go-to comfort food.'],
+   ['I always get the window seat on planes, non-negotiable','interviewing',"You've been comparing travel habits."],
+   ['I\'m the friend who gets everyone lost on road trips','advice','You said road trips are your favourite kind of holiday.']],
+  boss:'Okay settle this: pineapple on pizza, yes or no? Be careful, I\'m judging you',bossCtx:"You've been teasing each other about food opinions all week."},
  {n:3,name:'The Close',sub:'Turn banter into a confident, low-pressure invitation.',
   rules:'Specific, easy to say yes to, not hesitant, not needy. Say something they can answer.',
-  sc:[['lol okay you\'re funny. we\'ve been texting for a week and I still don\'t know what you look like in 3D','thirsty'],
-   ['I\'ve been craving a really good taco all day and nobody here knows where to go','advice'],
-   ['This thread is the best part of my day, no pressure lol','clunky'],
-   ['Ugh I need to get out of the house this weekend. Any ideas?','advice'],
-   ['That coffee place you mentioned sounds amazing','interviewing'],
-   ['We should probably stop texting and just prove we\'re this funny in real life','try-hard']],
-  boss:'Okay the banter is strong. Now I\'m curious if you\'re this good in person'}
+  sc:[['lol okay you\'re funny. we\'ve been texting for a week and I still don\'t know what you look like in 3D','thirsty',"You've texted every day for a week and the banter has been great, but you haven't met yet."],
+   ['I\'ve been craving a really good taco all day and nobody here knows where to go','advice',"Earlier you joked that you're a self-appointed taco expert."],
+   ['This thread is the best part of my day, no pressure lol','clunky',"You've had a long, fun back-and-forth all afternoon."],
+   ['Ugh I need to get out of the house this weekend. Any ideas?','advice',"It's Thursday. You've been texting for about a week."],
+   ['That coffee place you mentioned sounds amazing','interviewing','Yesterday you mentioned a coffee spot you love near your work.'],
+   ['We should probably stop texting and just prove we\'re this funny in real life','try-hard',"You've been roasting each other for an hour."]],
+  boss:'Okay the banter is strong. Now I\'m curious if you\'re this good in person',bossCtx:'A week of strong banter. They just sent this.'}
 ];
 const HINTS={1:'Accuse them of something absurd. Exaggerate. Flip the blame.',2:'Drop both of you into a tiny scenario ("we\'d…").',3:'Name a place and a time, keep it light.'};
 const SKILLS=[
@@ -157,7 +158,7 @@ async function api(path,body,method){
   return j;
 }
 const coreKey=(n,i)=>'s'+n+'-'+i;
-function scen(n,i){return{stage:n,key:coreKey(n,i),text:STAGES[n-1].sc[i][0],trap:STAGES[n-1].sc[i][1]}}
+function scen(n,i){const c=STAGES[n-1].sc[i];return{stage:n,key:coreKey(n,i),text:c[0],trap:c[1],ctx:c[2]}}
 
 /* ---------- analytics (shared by home + stats) ---------- */
 function mastery(){
@@ -289,6 +290,7 @@ function stats(){
 }
 
 /* ---------- play ---------- */
+function ctxLine(t){if(!t)return;const d=document.createElement('div');d.className='ctx';d.textContent='📍 '+t;$('#chat').appendChild(d)}
 function bubble(who,t,cls=''){const d=document.createElement('div');d.className='b '+who+' '+cls;d.textContent=t;$('#chat').appendChild(d);main.scrollTop=main.scrollHeight;return d}
 function shell(title,tags){
   $('#ttl').textContent=title;foot.hidden=false;hud();
@@ -299,20 +301,20 @@ function shell(title,tags){
 function play(s){
   cur={...s,thread:[{who:'them',t:s.text}],boss:false,busy:false};
   shell('Stage '+s.stage,`<span class="tag">Stage ${s.stage}</span>${s.key.startsWith('gen:')?'<span class="tag gen">fresh</span>':''}${esc(STAGES[s.stage-1].rules)}`);
-  bubble('them',s.text);
+  ctxLine(s.ctx);bubble('them',s.text);
 }
 async function playGen(n,trap){
   cur={stage:n,busy:true,thread:[]};
   shell('Stage '+n,'<span class="tag gen">fresh</span>Writing a new text…');foot.hidden=true;
   const ty=bubble('them','…','typing');
-  try{const j=await api('/generate',{stage:n,trap:trap||STAGES[n-1].sc[Math.floor(Math.random()*STAGES[n-1].sc.length)][1]});ty.remove();play({stage:n,key:j.key,text:j.text,trap:j.trap})}
+  try{const j=await api('/generate',{stage:n,trap:trap||STAGES[n-1].sc[Math.floor(Math.random()*STAGES[n-1].sc.length)][1]});ty.remove();play({stage:n,key:j.key,text:j.text,trap:j.trap,ctx:j.context})}
   catch(e){ty.remove();$('#res').innerHTML=`<div class="card err">Couldn't get a fresh text (${esc(e.message)}).</div>`}
 }
 function rally(n){
   const st=STAGES[n-1];
-  cur={stage:n,key:'rally'+n,thread:[{who:'them',t:st.boss}],boss:true,rid:'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),v:[],busy:false};
+  cur={stage:n,key:'rally'+n,ctx:st.bossCtx,thread:[{who:'them',t:st.boss}],boss:true,rid:'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),v:[],busy:false};
   shell('Rally · '+st.name,'<span class="tag boss">BOSS</span>4 texts. Keep the bit alive.');
-  bubble('them',st.boss);
+  ctxLine(st.bossCtx);bubble('them',st.boss);
 }
 
 async function submit(){
@@ -321,7 +323,7 @@ async function submit(){
   bubble('me',t);
   const ty=bubble('them','coach is reading…','typing');
   try{
-    const j=await api('/judge',{stage:cur.stage,key:cur.key,thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined});
+    const j=await api('/judge',{stage:cur.stage,key:cur.key,context:cur.ctx,thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined});
     cur.thread.push({who:'me',t});ty.remove();
     const rec={ts:Date.now()/1000,stage:cur.stage,scenario_key:cur.key,them_text:[...cur.thread].reverse().find(m=>m.who==='them').t,reply:t,verdict:j.verdict,score:j.score,flags:j.flags,diagnosis:j.diagnosis,rally_id:cur.boss?cur.rid:null};
     A.unshift(rec);
@@ -365,7 +367,7 @@ async function bossTurn(verdict){
     return;
   }
   const ty=bubble('them','…','typing');
-  try{const j=await api('/reply',{thread:cur.thread});ty.remove();cur.thread.push({who:'them',t:j.text});bubble('them',j.text)}
+  try{const j=await api('/reply',{thread:cur.thread,context:cur.ctx});ty.remove();cur.thread.push({who:'them',t:j.text});bubble('them',j.text)}
   catch(e){ty.remove();bubble('them','(lost signal)')}
   $('#res').insertAdjacentHTML('beforeend',`<div class="note">Turn ${cur.v.length}/4 · ${r.ps} pass, ${r.fs} miss. Keep the bit going, don't retreat to questions.</div>`);
 }
