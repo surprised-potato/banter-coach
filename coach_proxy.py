@@ -173,9 +173,20 @@ with dbl:
         db.execute("ALTER TABLE attempts ADD COLUMN challenge TEXT")
     if "drill_run" not in cols:
         db.execute("ALTER TABLE attempts ADD COLUMN drill_run TEXT")
+    if "prompt_version" not in cols:
+        db.execute("ALTER TABLE attempts ADD COLUMN prompt_version TEXT")
+    db.executescript("""
+    CREATE TABLE IF NOT EXISTS eval_items(id INTEGER PRIMARY KEY, them TEXT, context TEXT, reply TEXT, source TEXT, intended TEXT, owner INTEGER, UNIQUE(them, reply));
+    CREATE TABLE IF NOT EXISTS ratings(user_id INTEGER, item_id INTEGER, verdict TEXT, tags TEXT, ts REAL, PRIMARY KEY(user_id, item_id));
+    CREATE TABLE IF NOT EXISTS eval_runs(id INTEGER PRIMARY KEY, user_id INTEGER, ts REAL, prompt_version TEXT, mode TEXT, status TEXT, results TEXT);
+    """)
+    if "owner" not in [r[1] for r in db.execute("PRAGMA table_info(eval_items)")]:
+        db.execute("ALTER TABLE eval_items ADD COLUMN owner INTEGER")   # set for a player's own replies: only they see them
     db.execute("""CREATE TABLE IF NOT EXISTS drills(id TEXT PRIMARY KEY, user_id INTEGER, created REAL, spec TEXT,
         saved INTEGER DEFAULT 0, runs INTEGER DEFAULT 0, best INTEGER DEFAULT 0, cleared INTEGER DEFAULT 0)""")
     db.commit()
+
+PROMPT_VERSION = hashlib.sha1((COACH + MODEL).encode()).hexdigest()[:8]
 
 def q(sql, args=(), one=False, write=False):
     with dbl:
@@ -283,6 +294,9 @@ def judge_llm(d, recent=None):
     if challenge:
         t = TECH[challenge]
         prompt += "\nTECHNIQUE CHALLENGE: the user must use %s (%s). If the reply does not clearly use it, the verdict is at most Weak and the diagnosis must say so." % (t["name"], t["how"])
+    if d.get("_personal"):
+        prompt += "\nThis player's own ratings of other replies (align your verdicts with their taste):\n" + "\n".join(
+            'THEM: "%s" / REPLY: "%s" -> %s' % (x["them"], x["reply"], x["verdict"]) for x in d["_personal"])
     if d.get("_rule"):
         prompt += "\nDRILL: the user is practising this rule: %s (principle: %s). The rule is a MINIMUM requirement and earns no credit by itself: grade the reply exactly as you would with no drill (would it actually land with this person?). Only mention the rule in the diagnosis if it explains a miss." % (
             d["_rule"]["text"], d.get("_principle", ""))
@@ -564,7 +578,7 @@ def user_from(h):
     return dict(r) if r else None
 
 def history(uid, limit):
-    rows = q("SELECT ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge, drill_run FROM attempts WHERE user_id=? ORDER BY ts DESC LIMIT ?", (uid, limit))
+    rows = q("SELECT ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge, drill_run, prompt_version FROM attempts WHERE user_id=? ORDER BY ts DESC LIMIT ?", (uid, limit))
     return [dict(r, flags=json.loads(r["flags"] or "[]")) for r in rows]
 
 def signup_login(d, ip, signup):
@@ -611,9 +625,10 @@ class H(BaseHTTPRequestHandler):
         self.send_response(204); self._cors(); self.end_headers()
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path == "/health": return self._send(200, {"ok": True, "model": MODEL})
+        if u.path == "/health": return self._send(200, {"ok": True, "model": MODEL, "prompt_version": PROMPT_VERSION})
         if u.path == "/techniques": return self._send(200, {"techniques": TECHNIQUES})
         user = user_from(self)
+        if u.path in ("/eval/items", "/eval/report"): return self._send(*eval_api(u.path, {}, user))
         if u.path in ("/me", "/history", "/drills") and not user: return self._send(401, {"error": "log in again"})
         if u.path == "/drills":
             return self._send(200, {"drills": [drill_out(r) for r in q("SELECT * FROM drills WHERE user_id=? AND saved=1 ORDER BY created DESC", (user["id"],))]})
@@ -626,7 +641,7 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         p = self.path
         if p not in ("/judge", "/reply", "/generate", "/help", "/signup", "/login", "/logout", "/rally_result",
-                     "/drill/suggest", "/drill/save", "/drill/remove", "/drill/result"):
+                     "/drill/suggest", "/drill/save", "/drill/remove", "/drill/result", "/eval/rate", "/eval/run", "/eval/use"):
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -639,6 +654,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if p == "/rally_result": return self._send(*rally_result(d, user))
             if p in ("/drill/save", "/drill/remove", "/drill/result"): return self._send(*drill_api(p, d, user))
+            if p.startswith("/eval/"): return self._send(*eval_api(p, d, user))
             if limited(hits, self._ip(), RATE): return self._send(429, {"error": "slow down"})
             if p == "/drill/suggest": return self._send(*drill_api(p, d, user))
             if p == "/reply": return self._send(200, reply_llm(d))
@@ -656,6 +672,7 @@ class H(BaseHTTPRequestHandler):
                 prog = get_progress(user["id"])
                 if not unlocked(prog, stage): return self._send(403, {"error": "stage locked"})
                 recent = [r["reply"] for r in q("SELECT reply FROM attempts WHERE user_id=? ORDER BY ts DESC LIMIT 6", (user["id"],))]
+                if prog.get("judge") == "personal": d["_personal"] = personal_examples(user["id"])
                 j = judge_llm(d, recent)
             else:
                 j = judge_llm(d)
@@ -665,9 +682,9 @@ class H(BaseHTTPRequestHandler):
                 ch = d.get("challenge") if d.get("challenge") in TECH else None
                 run = clean(d.get("drill_run", ""), 40) or None
                 src = "gen" if key.startswith("gen:") else "drill" if key.startswith("drill:") else "core"
-                q("INSERT INTO attempts(user_id, ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge, drill_run) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                q("INSERT INTO attempts(user_id, ts, stage, scenario_key, source, them_text, reply, verdict, score, flags, diagnosis, rally_id, technique, challenge, drill_run, prompt_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                   (user["id"], time.time(), stage, key, src, them, clean(d.get("reply", "")),
-                   j["verdict"], j["score"], json.dumps(j["flags"]), j["diagnosis"], rid, j["technique"], ch, run), write=True)
+                   j["verdict"], j["score"], json.dumps(j["flags"]), j["diagnosis"], rid, j["technique"], ch, run, PROMPT_VERSION + ("p" if d.get("_personal") else "")), write=True)
                 apply_attempt(prog, stage, None if (rid or src == "drill") else key, j["verdict"])
                 set_progress(user["id"], prog)
                 j["progress"] = prog
@@ -675,6 +692,114 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             self._send(502, {"error": "coach offline: %s" % type(e).__name__})
     def log_message(self, *a): pass
+
+# ---------------- judge calibration (you are the ground truth) ----------------
+ORDER = {"Dead End": 0, "Weak": 1, "Pass": 2}
+VERDICTS = ["Dead End", "Weak", "Pass"]
+eval_lock = threading.Lock(); eval_busy = set()
+
+def is_tuning(item_id):
+    """Fixed 50/50 split: tuning half feeds personal examples, held-out half measures."""
+    return int(hashlib.sha1(("split%d" % item_id).encode()).hexdigest(), 16) % 2 == 0
+
+def metrics(pairs):
+    """pairs: [(human, judge)]. Agreement, Cohen's kappa, confusion matrix, lenient/harsh counts."""
+    n = len(pairs)
+    if not n: return {"n": 0}
+    cm = {h: {j: 0 for j in VERDICTS} for h in VERDICTS}
+    for h, j in pairs: cm[h][j] += 1
+    po = sum(cm[v][v] for v in VERDICTS) / n
+    pe = sum((sum(cm[v].values()) / n) * (sum(cm[h][v] for h in VERDICTS) / n) for v in VERDICTS)
+    kappa = (po - pe) / (1 - pe) if pe < 1 else 1.0
+    return {"n": n, "agreement": round(po, 3), "kappa": round(kappa, 3), "confusion": cm,
+            "lenient": sum(ORDER[j] > ORDER[h] for h, j in pairs), "harsh": sum(ORDER[j] < ORDER[h] for h, j in pairs)}
+
+def personal_examples(uid, k=8):
+    """Up to k tuning-half ratings, disagreements with the latest baseline run first."""
+    rows = q("SELECT i.id, i.them, i.reply, r.verdict FROM ratings r JOIN eval_items i ON i.id=r.item_id WHERE r.user_id=?", (uid,))
+    rows = [dict(r) for r in rows if is_tuning(r["id"])]
+    last = q("SELECT results FROM eval_runs WHERE user_id=? AND mode='baseline' AND status='done' ORDER BY ts DESC LIMIT 1", (uid,), one=True)
+    judged = {x["item_id"]: x["judge"] for x in json.loads(last["results"])} if last else {}
+    rows.sort(key=lambda r: (judged.get(r["id"], r["verdict"]) == r["verdict"], r["id"]))
+    picked, per = [], {v: 0 for v in VERDICTS}
+    for r in rows:                      # keep a spread of verdicts
+        if len(picked) < k and per[r["verdict"]] < k // 2:
+            picked.append({"them": clean(r["them"], 160), "reply": clean(r["reply"], 160), "verdict": r["verdict"]}); per[r["verdict"]] += 1
+    return picked
+
+def judge_item(item, personal=None, votes=1):
+    d = {"stage": 1, "context": item["context"] or "", "thread": [{"who": "them", "t": item["them"]}], "reply": item["reply"]}
+    if personal: d["_personal"] = personal
+    vs = [judge_llm(dict(d), []) for _ in range(votes)]
+    if votes == 1: return vs[0]
+    order = sorted(vs, key=lambda v: ORDER[v["verdict"]])
+    return order[len(order) // 2]       # median verdict = majority for 3 votes
+
+def eval_run(uid, mode, votes):
+    rid = q("INSERT INTO eval_runs(user_id, ts, prompt_version, mode, status, results) VALUES(?,?,?,?,?,?)",
+            (uid, time.time(), PROMPT_VERSION, mode, "running", "[]"), write=True)
+    try:
+        items = [dict(r) for r in q("SELECT i.*, r.verdict AS human FROM ratings r JOIN eval_items i ON i.id=r.item_id WHERE r.user_id=?", (uid,))]
+        personal = personal_examples(uid) if mode.startswith("personal") else None
+        out = []
+        for it in items:
+            if personal and any(p["reply"] == clean(it["reply"], 160) and p["them"] == clean(it["them"], 160) for p in personal):
+                continue                         # never test on an item that is in the prompt
+            j = judge_item(it, personal, votes)
+            out.append({"item_id": it["id"], "human": it["human"], "judge": j["verdict"], "score": j["score"], "why": clean(j["diagnosis"], 300)})
+            q("UPDATE eval_runs SET results=? WHERE id=?", (json.dumps(out), rid), write=True)
+        q("UPDATE eval_runs SET status='done', results=? WHERE id=?", (json.dumps(out), rid), write=True)
+    except Exception as e:
+        q("UPDATE eval_runs SET status=? WHERE id=?", ("failed: %s" % type(e).__name__, rid), write=True)
+    finally:
+        with eval_lock: eval_busy.discard(uid)
+
+def eval_report(uid):
+    n_items = q("SELECT COUNT(*) c FROM eval_items WHERE owner IS NULL OR owner=?", (uid,), one=True)["c"]
+    rated = q("SELECT COUNT(*) c FROM ratings WHERE user_id=?", (uid,), one=True)["c"]
+    runs = []
+    for r in q("SELECT * FROM eval_runs WHERE user_id=? ORDER BY ts DESC LIMIT 6", (uid,)):
+        res = json.loads(r["results"] or "[]")
+        held = [(x["human"], x["judge"]) for x in res if not is_tuning(x["item_id"])]
+        dis = []
+        for x in res:
+            if x["human"] != x["judge"]:
+                it = q("SELECT them, reply FROM eval_items WHERE id=?", (x["item_id"],), one=True)
+                if it: dis.append(dict(x, them=it["them"], reply=it["reply"]))
+        runs.append({"id": r["id"], "ts": r["ts"], "mode": r["mode"], "status": r["status"], "prompt_version": r["prompt_version"],
+                     "all": metrics([(x["human"], x["judge"]) for x in res]), "held_out": metrics(held), "disagreements": dis[:40]})
+    prog = get_progress(uid)
+    return {"items": n_items, "rated": rated, "running": uid in eval_busy, "prompt_version": PROMPT_VERSION,
+            "judge_mode": prog.get("judge", "baseline"), "runs": runs}
+
+def eval_api(p, d, user, query=None):
+    if not user: return 401, {"error": "log in to calibrate the coach"}
+    uid = user["id"]
+    if p == "/eval/items":
+        rows = q("SELECT id, them, context, reply FROM eval_items WHERE (owner IS NULL OR owner=?) AND id NOT IN (SELECT item_id FROM ratings WHERE user_id=?)", (uid, uid))
+        rows = sorted((dict(r) for r in rows), key=lambda r: hashlib.sha1(("%d-%d" % (uid, r["id"])).encode()).hexdigest())
+        return 200, {"items": rows[:10], "left": len(rows), "total": q("SELECT COUNT(*) c FROM eval_items WHERE owner IS NULL OR owner=?", (uid,), one=True)["c"]}
+    if p == "/eval/rate":
+        iid = int(d.get("item_id", 0)); v = d.get("verdict")
+        if v not in VERDICTS or not q("SELECT id FROM eval_items WHERE id=? AND (owner IS NULL OR owner=?)", (iid, uid), one=True): return 400, {"error": "bad rating"}
+        tags = [clean(t, 20) for t in (d.get("tags") or [])[:5] if isinstance(t, str)]
+        q("INSERT OR REPLACE INTO ratings(user_id, item_id, verdict, tags, ts) VALUES(?,?,?,?,?)", (uid, iid, v, json.dumps(tags), time.time()), write=True)
+        return 200, {"ok": True}
+    if p == "/eval/run":
+        mode = d.get("mode") if d.get("mode") in ("baseline", "personal") else "baseline"
+        votes = 3 if d.get("votes") == 3 else 1
+        if q("SELECT COUNT(*) c FROM ratings WHERE user_id=?", (uid,), one=True)["c"] < 20: return 400, {"error": "rate at least 20 replies first"}
+        with eval_lock:
+            if uid in eval_busy: return 409, {"error": "a check is already running"}
+            eval_busy.add(uid)
+        threading.Thread(target=eval_run, args=(uid, mode + ("-vote3" if votes == 3 else ""), votes), daemon=True).start()
+        return 200, {"started": True}
+    if p == "/eval/use":
+        mode = d.get("mode") if d.get("mode") in ("baseline", "personal") else "baseline"
+        prog = get_progress(uid); prog["judge"] = mode; set_progress(uid, prog)
+        return 200, {"judge_mode": mode}
+    if p == "/eval/report": return 200, eval_report(uid)
+    return 404, {"error": "not found"}
 
 def rally_score(verdicts):
     ps = sum(v == "Pass" for v in verdicts); fs = len(verdicts) - ps

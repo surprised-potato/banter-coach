@@ -58,6 +58,12 @@ input{width:100%;margin:6px 0 10px}
 .drow{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .drow:first-of-type{border-top:0}
 select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;flex:1;min-width:0}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.tbl th,.tbl td{text-align:left;padding:5px 4px;border-bottom:1px solid var(--line)}
+.tbl.cm td,.tbl.cm th{text-align:center}.tbl.cm td.ok{color:var(--pass);font-weight:700}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:4px 10px;margin:4px 4px 0 0;font-size:13px;color:var(--mut)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.rate{flex:1}.btn.rate.Pass{background:var(--pass);color:#06281c}.btn.rate.Weak{background:var(--weak);color:#2e1d00}.btn.rate.DeadEnd{background:var(--dead)}
 .deck{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tc{text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px}
 .tc b{display:block;font-size:14px}.tc small{display:block;color:var(--mut);margin-top:2px}
@@ -254,6 +260,8 @@ function route(){
   foot.hidden=true;
   if(h.startsWith('#stage/')){const n=+h.split('/')[1];return unlocked(n)?stageView(n):go('#home')}
   if(h==='#stats')return stats();
+  if(h==='#calib')return calibView();
+  if(h==='#rate')return rateView();
   if(h==='#login')return login();
   home();
 }
@@ -397,6 +405,63 @@ function deckCard(){
   const ts=techStats(),m=ts.filter(t=>t.status==='mastered').length;
   return `<div class="card"><div class="k">Technique deck · ${m}/${ts.length} mastered</div><p class="note">Pass ${MASTER}× with a technique to master it. Tap one to practise it.</p><div class="deck">${ts.map(t=>`<button class="tc ${t.status} ${t.locked?'lock':''}" ${t.locked?'disabled':''} data-t="${t.id}"><b>${t.status==='mastered'?'★ ':''}${esc(t.name)}</b><small>${t.locked?'Unlocks in Stage '+t.stage:esc(t.how)}</small>${!t.locked&&t.status==='unseen'?`<small class="tx">${esc(t.ex[0])}</small>`:''}<span class="tm">${t.passes}/${MASTER} passes · used ${t.used}</span></button>`).join('')}</div></div>`;
 }
+/* ---------- coach calibration ---------- */
+const pct=x=>x==null?'–':Math.round(x*100)+'%';
+let calibPoll=null;
+async function calibView(){
+  clearTimeout(calibPoll);$('#ttl').textContent='Calibrate the coach';hud();
+  if(!TOKEN){go('#login');return}
+  main.innerHTML='<p class="note">Loading…</p>';
+  let r;try{r=await api('/eval/report')}catch(e){main.innerHTML=`<div class="card err">${esc(e.message)}</div>`;return}
+  if(location.hash!=='#calib')return;
+  const done=r.runs.filter(x=>x.status==='done'),last=done[0],ready=r.rated>=20;
+  const best=m=>done.find(x=>x.mode.startsWith(m));
+  let h=`<div class="card"><p style="margin-top:0">You are the ground truth. Rate replies the way <i>you</i> would react, then check how often the coach agrees. Targets: <b>≥75% agreement</b> and <b>κ ≥ 0.6</b> on held-out replies.</p>
+  <div class="bar"><i style="width:${Math.round(r.rated/Math.max(1,r.items)*100)}%"></i></div><small class="note">${r.rated}/${r.items} rated${ready?'':' · rate 20 to unlock checks'}</small>
+  <div class="row" style="margin-top:10px"><button class="btn" id="rgo" ${r.rated>=r.items?'disabled':''}>Rate 10 replies</button></div></div>`;
+  h+=`<div class="card"><div class="k">Run a check</div><p class="note">Grades every reply you rated with the current coach (about 3 s each). Half your ratings are held out: they never go into the coach's prompt, so that number is the honest one.</p>
+  <div class="row"><button class="btn ghost" id="rb" ${!ready||r.running?'disabled':''}>Check standard coach</button><button class="btn ghost" id="rp" ${!ready||r.running?'disabled':''}>Check coach tuned to me</button></div>
+  ${r.running?'<p class="note">⏳ Check running… this page refreshes itself.</p>':''}</div>`;
+  if(done.length){
+    const row=x=>`<tr><td>${x.mode.startsWith('personal')?'Tuned to me':'Standard'}</td><td><b>${pct(x.held_out.agreement)}</b></td><td>${x.held_out.kappa??'–'}</td><td>${x.held_out.n}</td><td>${pct(x.all.agreement)}</td><td><small>${esc(x.prompt_version)}</small></td></tr>`;
+    h+=`<div class="card"><div class="k">Results</div><table class="tbl"><tr><th>Coach</th><th>Held-out agree</th><th>κ</th><th>n</th><th>All</th><th>Version</th></tr>${done.map(row).join('')}</table>`;
+    const m=last.all,cm=m.confusion;
+    h+=`<p class="note" style="margin-top:10px">Latest check: the coach was <b>stricter than you ${m.harsh}×</b> and <b>more lenient ${m.lenient}×</b>${m.harsh>m.lenient*2?' → it runs harsh':m.lenient>m.harsh*2?' → it runs soft':''}.</p>
+    <table class="tbl cm"><tr><th>You ↓ / Coach →</th>${['Dead End','Weak','Pass'].map(v=>`<th>${v}</th>`).join('')}</tr>${['Dead End','Weak','Pass'].map(hv=>`<tr><th>${hv}</th>${['Dead End','Weak','Pass'].map(jv=>`<td class="${hv===jv?'ok':''}">${cm[hv][jv]}</td>`).join('')}</tr>`).join('')}</table></div>`;
+    h+=`<div class="card"><div class="k">Coach used in play</div><div class="row" style="margin-top:8px"><button class="btn ${r.judge_mode==='baseline'?'':'ghost'}" id="ub">Standard</button><button class="btn ${r.judge_mode==='personal'?'':'ghost'}" id="up">Tuned to me</button></div>
+    <p class="note">${(()=>{const b=best('baseline'),p=best('personal');return b&&p?`Held-out: standard ${pct(b.held_out.agreement)} vs tuned ${pct(p.held_out.agreement)}. Pick the one that agrees with you more.`:'Run both checks to compare.'})()}</p></div>`;
+    h+=`<div class="card"><div class="k">Where you and the coach disagree (${last.disagreements.length})</div>${last.disagreements.map(x=>`<details><summary><span class="v ${x.human.replace(' ','')}">You: ${esc(x.human)}</span><span class="ell">${esc(x.reply)}</span><small class="note">coach: ${esc(x.judge)}</small></summary><p class="note" style="margin:6px 0">Them: "${esc(x.them)}"</p><div style="font-size:14px">${esc(x.why)}</div></details>`).join('')||'<p class="note">None. Nice.</p>'}</div>`;
+  }
+  h+=`<button class="btn ghost" id="back">← Stats</button>`;
+  main.innerHTML=h;
+  $('#rgo').onclick=()=>go('#rate');$('#back').onclick=()=>go('#stats');
+  const start=async mode=>{try{await api('/eval/run',{mode});calibView()}catch(e){alert(e.message)}};
+  if($('#rb'))$('#rb').onclick=()=>start('baseline');if($('#rp'))$('#rp').onclick=()=>start('personal');
+  const use=async mode=>{try{await api('/eval/use',{mode});calibView()}catch(e){alert(e.message)}};
+  if($('#ub'))$('#ub').onclick=()=>use('baseline');if($('#up'))$('#up').onclick=()=>use('personal');
+  if(r.running)calibPoll=setTimeout(()=>{if(location.hash==='#calib')calibView()},5000);
+}
+let RQ=[];
+async function rateView(){
+  clearTimeout(calibPoll);$('#ttl').textContent='Rate replies';hud();
+  if(!TOKEN){go('#login');return}
+  if(!RQ.length){main.innerHTML='<p class="note">Loading…</p>';try{RQ=(await api('/eval/items')).items}catch(e){main.innerHTML=`<div class="card err">${esc(e.message)}</div>`;return}}
+  if(!RQ.length){main.innerHTML='<div class="card">All replies rated. 🎉</div><button class="btn ghost" id="back">← Calibration</button>';$('#back').onclick=()=>go('#calib');return}
+  const it=RQ[0],tags=new Set();
+  main.innerHTML=`<p class="note">How would this reply land if <i>you</i> got it? Rate your honest reaction, not what the coach would say. ${RQ.length} left in this set.</p>
+  <div class="chat">${it.context?`<div class="ctx">📍 ${esc(it.context)}</div>`:''}<div class="b them">${esc(it.them)}</div><div class="b me">${esc(it.reply)}</div></div>
+  <div class="chips" id="tg">${['generic','too literal','clunky','try-hard','funny!'].map(t=>`<button class="chip" data-tag="${t}">${t}</button>`).join('')}</div>
+  <div class="row" style="margin-top:12px"><button class="btn rate Pass" data-v="Pass">Pass</button><button class="btn rate Weak" data-v="Weak">Weak</button><button class="btn rate DeadEnd" data-v="Dead End">Dead End</button></div>
+  <button class="btn ghost sm" id="back" style="margin-top:14px">← Calibration</button>`;
+  main.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{const t=b.dataset.tag;tags.has(t)?tags.delete(t):tags.add(t);b.classList.toggle('on')});
+  main.querySelectorAll('[data-v]').forEach(b=>b.onclick=async()=>{
+    main.querySelectorAll('[data-v]').forEach(x=>x.disabled=true);
+    try{await api('/eval/rate',{item_id:it.id,verdict:b.dataset.v,tags:[...tags]});RQ.shift();rateView()}
+    catch(e){alert('Could not save: '+e.message);main.querySelectorAll('[data-v]').forEach(x=>x.disabled=false)}
+  });
+  $('#back').onclick=()=>{RQ=[];go('#calib')};
+}
+
 function stats(){
   $('#ttl').textContent='Stats';hud();
   const pr=n=>{const a=A.filter(x=>x.stage===n&&!x.rally_id);return a.length?Math.round(a.filter(x=>x.verdict==='Pass').length/a.length*100)+'%':'–'};
@@ -409,6 +474,7 @@ function stats(){
   const ms=mastery();
   let h=`<div class="card"><div class="grid3"><div><b>${level()}</b><small class="note">level</small></div><div><b>${P.passes}/${P.tries}</b><small class="note">passes</small></div><div><b>${P.best}</b><small class="note">best streak</small></div></div></div>
   ${DRILLS.length?`<div class="card"><div class="k">Drills</div><p style="margin:6px 0 0">${DRILLS.filter(d=>d.cleared).length} cleared of ${DRILLS.length} saved · ${DRILLS.reduce((n,d)=>n+(d.runs||0),0)} runs</p></div>`:''}
+  <button class="card" id="calb"><div class="k">Coach calibration</div><p style="margin:6px 0 0">${TOKEN?'Rate replies yourself and see how often the coach agrees with you →':'Log in to calibrate the coach to your taste.'}</p></button>
   <div class="card"><div class="k">Pass rate by stage</div><div class="grid3" style="margin-top:6px">${[1,2,3].map(n=>`<div><b>${pr(n)}</b><small class="note">Stage ${n}</small></div>`).join('')}</div></div>
   <div class="card"><div class="k">Score trend</div>${spark}</div>
   <div class="card"><div class="k">Skills (last 10 replies)</div>${ms[0].m===null?'<p class="note">Play 3 texts first.</p>':ms.map(skillRow).join('')}</div>
@@ -418,6 +484,7 @@ function stats(){
   <div class="row"><button class="btn ghost" id="back">← Home</button>${TOKEN?'<button class="btn ghost" id="lo">Log out</button>':'<button class="btn ghost" id="rst">Reset guest progress</button>'}</div>`;
   main.innerHTML=h;
   main.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>play(challengeFor(b.dataset.t)));
+  $('#calb').onclick=()=>TOKEN?go('#calib'):go('#login');
   $('#back').onclick=()=>go('#home');
   if(TOKEN)$('#lo').onclick=()=>logout();
   else $('#rst').onclick=()=>{if(confirm('Reset guest progress?')){P=newP();A=[];saveGuest();go('#home')}};
