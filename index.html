@@ -10,18 +10,22 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 #app{max-width:520px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;padding:0 16px}
-header{display:flex;align-items:center;gap:10px;padding:14px 0 10px}
-header h1{font-size:18px;margin:0;flex:1}
+header{display:flex;align-items:center;gap:8px;padding:14px 0 10px}
+header h1{font-size:18px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill{background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:13px;color:var(--mut);white-space:nowrap}
+button.pill{cursor:pointer}
 .xp{height:6px;background:var(--panel2);border-radius:9px;overflow:hidden;margin-bottom:10px}
 .xp i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),#ffb84d);width:0;transition:width .5s}
 main{flex:1;overflow:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch}
 button{font:inherit;color:inherit;cursor:pointer}
 .btn{background:var(--acc);color:#fff;border:0;border-radius:12px;padding:12px 16px;font-weight:600}
 .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+.btn.sm{padding:6px 12px;font-size:14px}
 .btn:disabled{opacity:.5;cursor:default}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin:0 0 12px}
-.stage{display:flex;gap:12px;align-items:center;text-align:left;width:100%}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin:0 0 12px;display:block;width:100%;text-align:left}
+.card.hero{border:1px solid var(--acc);background:linear-gradient(135deg,rgba(255,79,139,.14),var(--panel) 60%)}
+.k{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.stage{display:flex;gap:12px;align-items:center}
 .stage.lock{opacity:.45;cursor:not-allowed}
 .stage b{display:block}.stage small{color:var(--mut)}
 .num{width:38px;height:38px;border-radius:12px;background:var(--panel2);display:grid;place-items:center;font-weight:700;flex:none}
@@ -34,136 +38,281 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes pop{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
 .note{font-size:13px;color:var(--mut);margin:4px 0 8px}
 .verdict{border-left:5px solid var(--mut)}
-.verdict.Pass{border-color:var(--pass)}.verdict.Weak{border-color:var(--weak)}.verdict.DeadEnd{border-color:var(--dead)}
+.verdict.Pass{border-left-color:var(--pass)}.verdict.Weak{border-left-color:var(--weak)}.verdict.DeadEnd{border-left-color:var(--dead)}
 .vh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
 .vh b{font-size:20px}.Pass .vh b{color:var(--pass)}.Weak .vh b{color:var(--weak)}.DeadEnd .vh b{color:var(--dead)}
 .rw{background:var(--panel2);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:14px}
-.flags span{display:inline-block;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:1px 8px;margin:6px 4px 0 0;color:var(--mut)}
+.chips span,.tag{display:inline-block;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:1px 8px;margin:6px 4px 0 0;color:var(--mut)}
+.tag.boss{background:#5a1f3a;color:#ffd0e2;border-color:#5a1f3a}
+.tag.gen{background:#1f3a5a;color:#d0e6ff;border-color:#1f3a5a}
 footer{padding:10px 0 calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
-.row{display:flex;gap:8px}
-textarea{flex:1;resize:none;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font:inherit;max-height:110px}
-.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--panel2);color:var(--mut);margin-right:6px}
-.tag.boss{background:#5a1f3a;color:#ffd0e2}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+textarea,input{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font:inherit;min-width:0}
+textarea{flex:1;resize:none;max-height:110px}
+input{width:100%;margin:6px 0 10px}
 .err{color:var(--dead)}
-.stats span{display:inline-block;margin:3px 6px 0 0}
-a{color:var(--acc)}
+.sk{display:grid;grid-template-columns:110px 1fr 38px;gap:8px;align-items:center;margin:6px 0;font-size:14px}
+.sk .bar{margin:0;height:8px}.sk .bar i{background:var(--acc)}
+.sk em{font-style:normal;color:var(--mut);text-align:right}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.grid3 b{display:block;font-size:22px}
+details{border-top:1px solid var(--line);padding:8px 0}
+details summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:baseline}
+details summary::-webkit-details-marker{display:none}
+.v{font-weight:700;font-size:13px;flex:none;width:62px}.v.Pass{color:var(--pass)}.v.Weak{color:var(--weak)}.v.DeadEnd{color:var(--dead)}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+svg.spark{width:100%;height:64px;display:block}
 </style>
 </head>
 <body>
 <div id="app">
-  <header><h1 id="ttl">Banter Coach</h1><span class="pill" id="streak"></span><span class="pill" id="lvl"></span></header>
+  <header><h1 id="ttl">Banter Coach</h1><span class="pill" id="streak"></span><span class="pill" id="lvl"></span><button class="pill" id="who" hidden></button></header>
   <div class="xp"><i id="xp"></i></div>
   <main id="main"></main>
   <footer id="foot" hidden>
-    <div class="row"><textarea id="inp" rows="1" maxlength="300" placeholder="Type your reply…"></textarea><button class="btn" id="send">Send</button></div>
+    <div class="row" style="flex-wrap:nowrap"><textarea id="inp" rows="1" maxlength="300" placeholder="Type your reply…"></textarea><button class="btn" id="send">Send</button></div>
   </footer>
 </div>
 <script>
 'use strict';
+/* ---------- config / storage ---------- */
 const qs=new URLSearchParams(location.search);
-if(qs.get('api')){try{localStorage.setItem('bc_api',qs.get('api'))}catch(e){}}
-const API=(()=>{try{return localStorage.getItem('bc_api')}catch(e){return null}})()||'https://notified-tenant-cyber-sunny.trycloudflare.com';
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+if(qs.get('api'))ls.set('bc_api',qs.get('api'));
+const API=ls.get('bc_api')||'https://notified-tenant-cyber-sunny.trycloudflare.com';
+const NEED=3;
 
 /* ---------- content ---------- */
+// each core text: [text, trap it baits]
 const STAGES=[
- {n:1,name:'The Pivot',sub:'Stop agreeing, advising, interviewing. Tease, exaggerate.',need:3,
+ {n:1,name:'The Pivot',sub:'Stop agreeing, advising, interviewing. Tease, exaggerate.',
   rules:'No safe small talk, no interview questions, no tips, no "same".',
-  sc:[
-   ['Honestly just surviving on iced coffee and spreadsheets at this point lol'],
-   ['Nothing crazy, probably just going to rot on my couch and rewatch The Office for the millionth time'],
-   ['Attempted homemade pasta from scratch and honestly my kitchen looks like a crime scene right now'],
-   ['Woke up at noon and currently debating if cereal counts as a real lunch'],
-   ['Just got back from the gym, my legs are jelly'],
-   ['Binge-watching a baking show instead of doing laundry'],
-   ['I need like three alarms to get up in the morning, it\'s embarrassing'],
-   ['My dog just stole my sandwich off the counter and he is not sorry']],
-  boss:['I swear I\'m a great cook, I just burn everything. Last night was a smoke alarm situation']},
- {n:2,name:'The Frame',sub:'Create "us" energy: hypotheticals, compatibility tests, specific compliments.',need:3,
+  sc:[['Honestly just surviving on iced coffee and spreadsheets at this point lol','advice'],
+   ['Nothing crazy, probably just going to rot on my couch and rewatch The Office for the millionth time','agreeing'],
+   ['Attempted homemade pasta from scratch and honestly my kitchen looks like a crime scene right now','thirsty'],
+   ['Woke up at noon and currently debating if cereal counts as a real lunch','agreeing'],
+   ['Just got back from the gym, my legs are jelly','interviewing'],
+   ['Binge-watching a baking show instead of doing laundry','advice'],
+   ['I need like three alarms to get up in the morning, it\'s embarrassing','agreeing'],
+   ['My dog just stole my sandwich off the counter and he is not sorry','interviewing']],
+  boss:'I swear I\'m a great cook, I just burn everything. Last night was a smoke alarm situation'},
+ {n:2,name:'The Frame',sub:'Create "us" energy: hypotheticals, compatibility tests, specific compliments.',
   rules:'Put the two of you in a scenario. Be specific. No generic "you\'re so pretty".',
-  sc:[
-   ['I\'m the type who always has a playlist for every mood lol'],
-   ['Planning a trip to Japan next year, I have 47 tabs open'],
-   ['I\'m weirdly competitive at board games, fair warning'],
-   ['Honestly I\'d live on tacos if I could'],
-   ['I always get the window seat on planes, non-negotiable'],
-   ['I\'m the friend who gets everyone lost on road trips']],
-  boss:['Okay settle this: pineapple on pizza, yes or no? Be careful, I\'m judging you']},
- {n:3,name:'The Close',sub:'Turn banter into a confident, low-pressure invitation.',need:3,
+  sc:[['I\'m the type who always has a playlist for every mood lol','interviewing'],
+   ['Planning a trip to Japan next year, I have 47 tabs open','advice'],
+   ['I\'m weirdly competitive at board games, fair warning','too literal'],
+   ['Honestly I\'d live on tacos if I could','agreeing'],
+   ['I always get the window seat on planes, non-negotiable','interviewing'],
+   ['I\'m the friend who gets everyone lost on road trips','advice']],
+  boss:'Okay settle this: pineapple on pizza, yes or no? Be careful, I\'m judging you'},
+ {n:3,name:'The Close',sub:'Turn banter into a confident, low-pressure invitation.',
   rules:'Specific, easy to say yes to, not hesitant, not needy. Say something they can answer.',
-  sc:[
-   ['lol okay you\'re funny. we\'ve been texting for a week and I still don\'t know what you look like in 3D'],
-   ['I\'ve been craving a really good taco all day and nobody here knows where to go'],
-   ['This thread is the best part of my day, no pressure lol'],
-   ['Ugh I need to get out of the house this weekend. Any ideas?'],
-   ['That coffee place you mentioned sounds amazing'],
-   ['We should probably stop texting and just prove we\'re this funny in real life']],
-  boss:['Okay the banter is strong. Now I\'m curious if you\'re this good in person']}
+  sc:[['lol okay you\'re funny. we\'ve been texting for a week and I still don\'t know what you look like in 3D','thirsty'],
+   ['I\'ve been craving a really good taco all day and nobody here knows where to go','advice'],
+   ['This thread is the best part of my day, no pressure lol','clunky'],
+   ['Ugh I need to get out of the house this weekend. Any ideas?','advice'],
+   ['That coffee place you mentioned sounds amazing','interviewing'],
+   ['We should probably stop texting and just prove we\'re this funny in real life','try-hard']],
+  boss:'Okay the banter is strong. Now I\'m curious if you\'re this good in person'}
 ];
 const HINTS={1:'Accuse them of something absurd. Exaggerate. Flip the blame.',2:'Drop both of you into a tiny scenario ("we\'d…").',3:'Name a place and a time, keep it light.'};
+const SKILLS=[
+ {id:'tease',name:'Teasing',flags:['agreeing','too literal','pun only'],why:'agreed, punned or answered literally'},
+ {id:'noint',name:'No interviews',flags:['interviewing'],why:'asked interview questions'},
+ {id:'noadv',name:'No advice',flags:['advice'],why:'gave advice'},
+ {id:'cal',name:'Calibration',flags:['thirsty','try-hard'],why:'came on too strong or tried too hard'},
+ {id:'conf',name:'Confidence',flags:['bailed','clunky'],why:'bailed or got clunky'}];
+const skillOf=f=>SKILLS.find(s=>s.flags.includes(f));
 
 /* ---------- state ---------- */
-let S=load();
-function load(){try{const j=JSON.parse(localStorage.getItem('bc_state'));if(j)return j}catch(e){}return{xp:0,streak:0,best:0,done:{1:[],2:[],3:[]},boss:{},flags:{},tries:0,passes:0}}
-function save(){try{localStorage.setItem('bc_state',JSON.stringify(S))}catch(e){}}
+let TOKEN=ls.get('bc_token'),NAME=ls.get('bc_name'),P=null,A=[];   // progress, attempts (newest first)
+const newP=()=>({xp:0,streak:0,best:0,tries:0,passes:0,passed:{1:[],2:[],3:[]},rally:{}});
+function loadGuest(){try{const g=JSON.parse(ls.get('bc_guest'));if(g&&g.P){P=g.P;A=g.A||[];return}}catch(e){}P=newP();A=[]}
+function saveGuest(){if(!TOKEN)ls.set('bc_guest',JSON.stringify({P,A:A.slice(0,200)}))}
+const passedOf=n=>P.passed[n]||P.passed[String(n)]||[];
+const unlocked=n=>n===1||!!P.rally[n-1];
+function applyAttempt(stage,key,verdict){ // mirrors server apply_attempt (guest mode)
+  P.tries++;
+  if(verdict==='Pass'){P.passes++;P.streak++;P.best=Math.max(P.best,P.streak);P.xp+=10+Math.min(P.streak,5)*2;const l=P.passed[stage]=passedOf(stage);if(key&&!l.includes(key))l.push(key)}
+  else{P.streak=0;P.xp+=2}
+}
+const rallyScore=v=>{const ps=v.filter(x=>x==='Pass').length,fs=v.length-ps;return{ps,fs,win:ps>=3||(v.length>=4&&fs<2&&ps>=2),over:ps>=3||fs>=2||v.length>=4}};
+
+/* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
 const main=$('#main'),foot=$('#foot'),inp=$('#inp'),send=$('#send');
-let cur=null;  // {stage,i,thread,boss,turn,fails,passes,busy}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const level=()=>1+Math.floor(P.xp/100);
+function hud(){
+  const on=!!P;$('#streak').hidden=$('#lvl').hidden=!on;
+  if(on){$('#streak').textContent='🔥 '+P.streak;$('#lvl').textContent='Lv '+level();$('#xp').style.width=(P.xp%100)+'%'}
+  const w=$('#who');w.hidden=!on;w.textContent=TOKEN?'👤 '+NAME:'👤 Guest';
+}
+async function api(path,body,method){
+  const h={'Content-Type':'application/json'};if(TOKEN)h.Authorization='Bearer '+TOKEN;
+  const r=await fetch(API+path,{method:method||(body?'POST':'GET'),headers:h,body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===401&&TOKEN&&path!=='/login'){logout(true);throw new Error('session expired, log in again')}
+  if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+const coreKey=(n,i)=>'s'+n+'-'+i;
+function scen(n,i){return{stage:n,key:coreKey(n,i),text:STAGES[n-1].sc[i][0],trap:STAGES[n-1].sc[i][1]}}
 
-function level(){return 1+Math.floor(S.xp/100)}
-function hud(){$('#streak').textContent='🔥 '+S.streak;$('#lvl').textContent='Lv '+level();$('#xp').style.width=(S.xp%100)+'%'}
-function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function unlocked(n){return n===1||(S.boss[n-1]===true)}
-
-/* ---------- menu ---------- */
-function menu(){
-  cur=null;foot.hidden=true;$('#ttl').textContent='Banter Coach';hud();
-  let h='<p class="note">A blunt coach grades your texts. Earn passes, beat the rally, advance.</p>';
-  for(const st of STAGES){
-    const d=S.done[st.n].length,lock=!unlocked(st.n);
-    h+=`<button class="card stage ${lock?'lock':''}" data-s="${st.n}"><span class="num">${lock?'🔒':st.n}</span><span style="flex:1"><b>${st.name}</b><small>${st.sub}</small><div class="bar"><i style="width:${Math.min(100,d/st.need*100)}%"></i></div><small>${d}/${st.need} passes${S.boss[st.n]?' · rally cleared ✓':''}</small></span></button>`;
+/* ---------- analytics (shared by home + stats) ---------- */
+function mastery(){
+  const recent=A.slice(0,10);
+  return SKILLS.map(s=>{
+    if(recent.length<3)return{...s,m:null,hits:0};
+    let t=0,hits=0;for(const a of recent){const bad=(a.flags||[]).some(f=>s.flags.includes(f));if(bad)hits++;t+=bad?0:a.verdict==='Pass'?100:60}
+    return{...s,m:Math.round(t/recent.length),hits};
+  });
+}
+function nextDrill(){
+  const top=[3,2,1].find(unlocked);
+  // 1. rally ready?
+  for(const n of [1,2,3])if(unlocked(n)&&!P.rally[n]&&passedOf(n).length>=NEED)return{type:'rally',stage:n,reason:`You have ${NEED} passes in Stage ${n}. Beat the rally to unlock the next stage.`};
+  const ms=mastery().filter(s=>s.m!==null).sort((a,b)=>a.m-b.m);
+  const weak=ms.length&&ms[0].m<85?ms[0]:null;
+  const st=STAGES[top-1];
+  const unpassed=st.sc.map((s,i)=>i).filter(i=>!passedOf(top).includes(coreKey(top,i)));
+  if(weak){
+    const recent6=A.slice(0,6),cnt=recent6.filter(a=>(a.flags||[]).some(f=>weak.flags.includes(f))).length;
+    const why=cnt?`You ${weak.why} in ${cnt} of your last ${recent6.length} replies.`:`${weak.name} is your weakest skill (${weak.m}).`;
+    const i=unpassed.find(i=>weak.flags.includes(st.sc[i][1]));
+    if(i!==undefined)return{type:'core',s:scen(top,i),reason:why+' This one baits exactly that.'};
+    // oldest failed core text with that trap, any unlocked stage
+    const failed=A.slice().reverse().find(a=>a.verdict!=='Pass'&&/^s\d-\d+$/.test(a.scenario_key||'')&&!a.rally_id&&unlocked(a.stage)&&!passedOf(a.stage).includes(a.scenario_key));
+    if(failed){const [n,i2]=failed.scenario_key.slice(1).split('-').map(Number);if(STAGES[n-1]?.sc[i2])return{type:'core',s:scen(n,i2),reason:why+' Retry one you missed.'}}
+    return{type:'gen',stage:top,trap:weak.flags[0],reason:why+' Here\'s a fresh text that baits it.'};
   }
-  const fl=Object.entries(S.flags).sort((a,b)=>b[1]-a[1]).slice(0,4);
-  h+=`<div class="card stats"><b>Your habits</b><br>${fl.length?fl.map(([k,v])=>`<span class="tag">${esc(k)} ×${v}</span>`).join(''):'<small class="note">Play a few texts to see what you keep doing wrong.</small>'}<div class="note">${S.passes} passes / ${S.tries} tries · best streak ${S.best}</div></div>`;
-  h+=`<p class="note">Coach server: <span id="srv">checking…</span></p><button class="btn ghost" id="rst">Reset progress</button>`;
-  main.innerHTML=h;
-  main.querySelectorAll('.stage').forEach(b=>b.onclick=()=>{const n=+b.dataset.s;if(unlocked(n))stageMenu(n)});
-  $('#rst').onclick=()=>{if(confirm('Reset all progress?')){S={xp:0,streak:0,best:0,done:{1:[],2:[],3:[]},boss:{},flags:{},tries:0,passes:0};save();menu()}};
-  fetch(API+'/health').then(r=>r.json()).then(()=>{$('#srv').textContent='online ✓'}).catch(()=>{$('#srv').innerHTML='<span class="err">offline — the host machine is asleep or LM Studio is off</span>'});
+  if(unpassed.length)return{type:'core',s:scen(top,unpassed[0]),reason:A.length?'Keep going in Stage '+top+'.':'Start here: your first text.'};
+  return{type:'gen',stage:top,trap:STAGES[top-1].sc[0][1],reason:'You\'ve passed every core text here. Fresh one incoming.'};
 }
 
-function stageMenu(n){
-  const st=STAGES[n-1];$('#ttl').textContent='Stage '+n+' · '+st.name;
-  let h=`<p class="note">${st.rules}</p>`;
-  st.sc.forEach((s,i)=>{const dn=S.done[n].includes(i);h+=`<button class="card stage" data-i="${i}"><span class="num">${dn?'✓':i+1}</span><span style="flex:1"><b>"${esc(s[0].slice(0,60))}${s[0].length>60?'…':''}"</b></span></button>`});
-  const ready=S.done[n].length>=st.need;
-  h+=`<button class="card stage ${ready?'':'lock'}" id="bossb"><span class="num">⚔</span><span><b>Rally (boss)</b><small>${ready?'Hold the bit for 4 texts. 2 misses and you\'re out.':'Needs '+st.need+' passes first.'}</small></span></button><button class="btn ghost" id="back">← Stages</button>`;
+/* ---------- router ---------- */
+let cur=null;
+function go(h){if(location.hash===h)route();else location.hash=h}
+window.addEventListener('hashchange',route);
+function route(){
+  const h=location.hash||'#home';
+  if(cur&&h!=='#play'){cur=null}
+  if(!P){return login()}
+  if(h==='#play'&&!cur)return go('#home');
+  if(h==='#play')return;
+  foot.hidden=true;
+  if(h.startsWith('#stage/')){const n=+h.split('/')[1];return unlocked(n)?stageView(n):go('#home')}
+  if(h==='#stats')return stats();
+  if(h==='#login')return login();
+  home();
+}
+
+/* ---------- login ---------- */
+function login(msg){
+  foot.hidden=true;$('#ttl').textContent='Banter Coach';hud();
+  main.innerHTML=`<div class="card"><p style="margin-top:0">A blunt coach grades your texts. Earn passes, beat the rally, advance.</p>
+  <label class="k" for="nm">Name</label><input id="nm" maxlength="24" autocomplete="username" value="${esc(NAME||'')}">
+  <label class="k" for="pn">PIN (4-6 digits)</label><input id="pn" inputmode="numeric" type="password" maxlength="6" autocomplete="current-password">
+  <div class="row"><button class="btn" id="li">Log in</button><button class="btn ghost" id="su">Create profile</button></div>
+  <p class="note err" id="lerr">${esc(msg||'')}</p></div>
+  <button class="btn ghost" id="gst">Play as guest</button><p class="note">Guest progress stays in this browser only. Profiles sync across devices.</p>
+  <p class="note">Coach server: <span id="srv">checking…</span></p>`;
+  const doAuth=async su=>{
+    $('#lerr').textContent='…';
+    try{const j=await api(su?'/signup':'/login',{name:$('#nm').value.trim(),pin:$('#pn').value.trim()});
+      TOKEN=j.token;NAME=j.name;ls.set('bc_token',TOKEN);ls.set('bc_name',NAME);P=j.progress;A=[];await refresh();go('#home')}
+    catch(e){$('#lerr').textContent=e.message}
+  };
+  $('#li').onclick=()=>doAuth(false);$('#su').onclick=()=>doAuth(true);
+  $('#pn').onkeydown=e=>{if(e.key==='Enter')doAuth(false)};
+  $('#gst').onclick=()=>{TOKEN=null;ls.del('bc_token');loadGuest();go('#home');route()};
+  checkSrv();
+}
+function checkSrv(){fetch(API+'/health').then(r=>r.json()).then(()=>{const s=$('#srv');if(s)s.textContent='online ✓'}).catch(()=>{const s=$('#srv');if(s)s.innerHTML='<span class="err">offline: the host machine is asleep or LM Studio is off</span>'})}
+function logout(expired){if(TOKEN)fetch(API+'/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{});TOKEN=null;ls.del('bc_token');P=null;A=[];cur=null;hud();if(location.hash!=='#login')location.hash='#login';login(expired?'Session expired. Log in again.':'')}
+async function refresh(){if(!TOKEN)return;const j=await api('/me');P=j.progress;A=j.attempts;NAME=j.name}
+
+/* ---------- home (dynamic) ---------- */
+function home(){
+  cur=null;$('#ttl').textContent='Banter Coach';hud();
+  const d=nextDrill();
+  let h=`<button class="card hero" id="nd"><div class="k">Next drill</div><b style="display:block;margin:4px 0">${
+    d.type==='rally'?'⚔ Stage '+d.stage+' rally':d.type==='gen'?'✨ Fresh Stage '+d.stage+' text':'"'+esc(d.s.text.slice(0,70))+(d.s.text.length>70?'…':'')+'"'}</b><small class="note">${esc(d.reason)}</small></button>`;
+  for(const st of STAGES){
+    const n=st.n,dn=passedOf(n).length,lock=!unlocked(n);
+    h+=`<button class="card stage ${lock?'lock':''}" data-s="${n}"><span class="num">${lock?'🔒':P.rally[n]?'✓':n}</span><span style="flex:1"><b>${st.name}</b><small>${lock?'Win the Stage '+(n-1)+' rally to unlock.':st.sub}</small><div class="bar"><i style="width:${Math.min(100,dn/NEED*100)}%"></i></div><small>${dn}/${NEED} passes${P.rally[n]?' · rally cleared':''}</small></span></button>`;
+  }
+  const ms=mastery();
+  h+=`<button class="card" id="st"><div class="k">Skills</div>${ms[0].m===null?'<p class="note">Play 3 texts to see your skill bars.</p>':ms.map(s=>`<div class="sk"><span>${s.name}</span><div class="bar"><i style="width:${s.m}%"></i></div><em>${s.m}</em></div>`).join('')}<small class="note">Tap for stats and history →</small></button>`;
+  if(!TOKEN)h+=`<p class="note">Playing as guest. <a href="#login">Log in or create a profile</a> to save across devices.</p>`;
   main.innerHTML=h;
-  main.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>play(n,+b.dataset.i));
-  $('#bossb').onclick=()=>{if(ready)rally(n)};$('#back').onclick=menu;
+  $('#nd').onclick=()=>d.type==='rally'?rally(d.stage):d.type==='gen'?playGen(d.stage,d.trap):play(d.s);
+  main.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const n=+b.dataset.s;if(unlocked(n))go('#stage/'+n)});
+  $('#st').onclick=()=>go('#stats');
+}
+
+function stageView(n){
+  const st=STAGES[n-1];$('#ttl').textContent='Stage '+n+' · '+st.name;hud();
+  let h=`<p class="note">${esc(st.rules)}</p>`;
+  st.sc.forEach((s,i)=>{const dn=passedOf(n).includes(coreKey(n,i));h+=`<button class="card stage" data-i="${i}"><span class="num">${dn?'✓':i+1}</span><span style="flex:1"><b>"${esc(s[0].slice(0,60))}${s[0].length>60?'…':''}"</b><small>baits: ${esc(s[1])}</small></span></button>`});
+  h+=`<button class="card stage" id="gen"><span class="num">✨</span><span><b>Fresh text</b><small>A new LLM-written text for this stage. Never runs out.</small></span></button>`;
+  const ready=passedOf(n).length>=NEED;
+  h+=`<button class="card stage ${ready?'':'lock'}" id="bossb"><span class="num">⚔</span><span><b>Rally (boss)</b><small>${P.rally[n]?'Cleared. Replay any time.':ready?'Hold the bit for 4 texts. 2 misses and you\'re out.':'Needs '+NEED+' passes first.'}</small></span></button><button class="btn ghost" id="back">← Home</button>`;
+  main.innerHTML=h;
+  main.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>play(scen(n,+b.dataset.i)));
+  $('#gen').onclick=()=>playGen(n);
+  $('#bossb').onclick=()=>{if(ready)rally(n)};$('#back').onclick=()=>go('#home');
+}
+
+/* ---------- stats ---------- */
+function stats(){
+  $('#ttl').textContent='Stats';hud();
+  const pr=n=>{const a=A.filter(x=>x.stage===n&&!x.rally_id);return a.length?Math.round(a.filter(x=>x.verdict==='Pass').length/a.length*100)+'%':'–'};
+  const sc=A.slice(0,30).reverse().map(a=>a.score);
+  let spark='<p class="note">Not enough attempts yet.</p>';
+  if(sc.length>1){const W=300,H=60,pts=sc.map((v,i)=>[i/(sc.length-1)*W,H-4-(v/100)*(H-8)]);
+    spark=`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Score trend, last ${sc.length} replies"><line x1="0" x2="${W}" y1="${H-4-.75*(H-8)}" y2="${H-4-.75*(H-8)}" stroke="var(--line)" stroke-dasharray="4 4"/><polyline fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${pts.map(p=>p.map(x=>x.toFixed(1)).join(',')).join(' ')}"/>${pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="${sc[i]>=75?'var(--pass)':sc[i]>=35?'var(--weak)':'var(--dead)'}" vector-effect="non-scaling-stroke"/>`).join('')}</svg><div class="note">Last ${sc.length} scores, oldest → newest. Dashed line = pass level.</div>`}
+  const fc={};A.forEach(a=>(a.flags||[]).forEach(f=>{(fc[f]=fc[f]||{n:0,ex:a.reply}).n++}));
+  const habits=Object.entries(fc).sort((a,b)=>b[1].n-a[1].n).slice(0,3);
+  const ms=mastery();
+  let h=`<div class="card"><div class="grid3"><div><b>${level()}</b><small class="note">level</small></div><div><b>${P.passes}/${P.tries}</b><small class="note">passes</small></div><div><b>${P.best}</b><small class="note">best streak</small></div></div></div>
+  <div class="card"><div class="k">Pass rate by stage</div><div class="grid3" style="margin-top:6px">${[1,2,3].map(n=>`<div><b>${pr(n)}</b><small class="note">Stage ${n}</small></div>`).join('')}</div></div>
+  <div class="card"><div class="k">Score trend</div>${spark}</div>
+  <div class="card"><div class="k">Skills (last 10 replies)</div>${ms[0].m===null?'<p class="note">Play 3 texts first.</p>':ms.map(s=>`<div class="sk"><span>${s.name}</span><div class="bar"><i style="width:${s.m}%"></i></div><em>${s.m}</em></div>`).join('')}</div>
+  <div class="card"><div class="k">Your top habits</div>${habits.length?habits.map(([f,o])=>`<p style="margin:8px 0 0"><b>${esc(f)}</b> ×${o.n}<br><small class="note">e.g. "${esc(o.ex)}"</small></p>`).join(''):'<p class="note">None yet. Suspicious.</p>'}</div>
+  <div class="card"><div class="k">History</div>${A.length?A.slice(0,50).map(a=>`<details><summary><span class="v ${a.verdict.replace(' ','')}">${esc(a.verdict)}</span><span class="ell">${esc(a.reply)}</span><small class="note">${a.score}</small></summary><p class="note" style="margin:6px 0">${a.rally_id?'<span class="tag boss">rally</span>':''}${(a.scenario_key||'').startsWith('gen:')?'<span class="tag gen">fresh</span>':''} Them: "${esc(a.them_text)}"</p><div style="font-size:14px">${esc(a.diagnosis)}</div><div class="chips">${(a.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div><small class="note">${new Date(a.ts*1000).toLocaleString()}</small></details>`).join(''):'<p class="note">No attempts yet.</p>'}</div>
+  <div class="row"><button class="btn ghost" id="back">← Home</button>${TOKEN?'<button class="btn ghost" id="lo">Log out</button>':'<button class="btn ghost" id="rst">Reset guest progress</button>'}</div>`;
+  main.innerHTML=h;
+  $('#back').onclick=()=>go('#home');
+  if(TOKEN)$('#lo').onclick=()=>logout();
+  else $('#rst').onclick=()=>{if(confirm('Reset guest progress?')){P=newP();A=[];saveGuest();go('#home')}};
 }
 
 /* ---------- play ---------- */
 function bubble(who,t,cls=''){const d=document.createElement('div');d.className='b '+who+' '+cls;d.textContent=t;$('#chat').appendChild(d);main.scrollTop=main.scrollHeight;return d}
 function shell(title,tags){
-  $('#ttl').textContent=title;foot.hidden=false;
-  main.innerHTML=`<div class="note">${tags}<button class="btn ghost" id="exit" style="padding:2px 10px;float:right">Exit</button></div><div class="chat" id="chat"></div><div id="res"></div>`;
-  $('#exit').onclick=()=>stageMenu(cur.stage);inp.value='';inp.focus();
+  $('#ttl').textContent=title;foot.hidden=false;hud();
+  main.innerHTML=`<div class="note">${tags}<button class="btn ghost sm" id="exit" style="float:right">Exit</button></div><div class="chat" id="chat"></div><div id="res"></div>`;
+  $('#exit').onclick=()=>{const n=cur.stage;cur=null;go('#stage/'+n)};inp.value='';inp.focus();
+  if(location.hash!=='#play')location.hash='#play';
 }
-function play(n,i){
-  const st=STAGES[n-1];cur={stage:n,i,thread:[{who:'them',t:st.sc[i][0]}],boss:false,busy:false};
-  shell('Stage '+n,`<span class="tag">Stage ${n}</span>${esc(st.rules)}`);
-  bubble('them',st.sc[i][0]);
+function play(s){
+  cur={...s,thread:[{who:'them',t:s.text}],boss:false,busy:false};
+  shell('Stage '+s.stage,`<span class="tag">Stage ${s.stage}</span>${s.key.startsWith('gen:')?'<span class="tag gen">fresh</span>':''}${esc(STAGES[s.stage-1].rules)}`);
+  bubble('them',s.text);
+}
+async function playGen(n,trap){
+  cur={stage:n,busy:true,thread:[]};
+  shell('Stage '+n,'<span class="tag gen">fresh</span>Writing a new text…');foot.hidden=true;
+  const ty=bubble('them','…','typing');
+  try{const j=await api('/generate',{stage:n,trap:trap||STAGES[n-1].sc[Math.floor(Math.random()*STAGES[n-1].sc.length)][1]});ty.remove();play({stage:n,key:j.key,text:j.text,trap:j.trap})}
+  catch(e){ty.remove();$('#res').innerHTML=`<div class="card err">Couldn't get a fresh text (${esc(e.message)}).</div>`}
 }
 function rally(n){
-  const st=STAGES[n-1],o=st.boss[0];cur={stage:n,i:-1,thread:[{who:'them',t:o}],boss:true,turn:0,fails:0,passes:0,busy:false};
+  const st=STAGES[n-1];
+  cur={stage:n,key:'rally'+n,thread:[{who:'them',t:st.boss}],boss:true,rid:'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),v:[],busy:false};
   shell('Rally · '+st.name,'<span class="tag boss">BOSS</span>4 texts. Keep the bit alive.');
-  bubble('them',o);
-}
-
-async function post(path,body){
-  const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||('HTTP '+r.status))}
-  return r.json();
+  bubble('them',st.boss);
 }
 
 async function submit(){
@@ -172,32 +321,30 @@ async function submit(){
   bubble('me',t);
   const ty=bubble('them','coach is reading…','typing');
   try{
-    const j=await post('/judge',{stage:cur.stage,thread:cur.thread,reply:t,rally:cur.boss});
+    const j=await api('/judge',{stage:cur.stage,key:cur.key,thread:cur.thread,reply:t,rally:cur.boss,rally_id:cur.boss?cur.rid:undefined});
     cur.thread.push({who:'me',t});ty.remove();
-    S.tries++;(j.flags||[]).forEach(f=>S.flags[f]=(S.flags[f]||0)+1);
-    const pass=j.verdict==='Pass';
-    if(pass){S.streak++;S.best=Math.max(S.best,S.streak);S.passes++;S.xp+=10+Math.min(S.streak,5)*2}else{S.streak=0;S.xp+=2}
-    card(j);
-    if(cur.boss)await bossTurn(pass);else await plainTurn(pass);
-    save();hud();
+    const rec={ts:Date.now()/1000,stage:cur.stage,scenario_key:cur.key,them_text:[...cur.thread].reverse().find(m=>m.who==='them').t,reply:t,verdict:j.verdict,score:j.score,flags:j.flags,diagnosis:j.diagnosis,rally_id:cur.boss?cur.rid:null};
+    A.unshift(rec);
+    if(j.progress)P=j.progress;else{applyAttempt(cur.stage,cur.boss?null:cur.key,j.verdict);saveGuest()}
+    card(j);hud();
+    if(cur.boss)await bossTurn(j.verdict);else plainTurn(j.verdict==='Pass');
   }catch(e){
     ty.remove();inp.value=t;$('#chat').lastChild.remove();
     $('#res').innerHTML=`<div class="card err">Couldn't reach the coach (${esc(e.message)}). The host machine may be offline. Try again.</div>`;
   }
-  cur.busy=false;send.disabled=false;inp.focus();
+  if(cur){cur.busy=false}send.disabled=false;inp.focus();
 }
 function card(j){
   const k=j.verdict.replace(' ','');
-  $('#res').insertAdjacentHTML('beforeend',`<div class="card verdict ${k}"><div class="vh"><b>${esc(j.verdict)}</b><span class="note">${j.score}/100</span></div><div>${esc(j.diagnosis)}</div>${(j.rewrites||[]).map(r=>`<div class="rw">💡 ${esc(r)}</div>`).join('')}<div class="flags">${(j.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div></div>`);
+  $('#res').insertAdjacentHTML('beforeend',`<div class="card verdict ${k}"><div class="vh"><b>${esc(j.verdict)}</b><span class="note">${j.score}/100</span></div><div>${esc(j.diagnosis)}</div>${(j.rewrites||[]).map(r=>`<div class="rw">💡 ${esc(r)}</div>`).join('')}<div class="chips">${(j.flags||[]).map(f=>`<span>${esc(f)}</span>`).join('')}</div></div>`);
   main.scrollTop=main.scrollHeight;
 }
-async function plainTurn(pass){
-  const n=cur.stage,i=cur.i,st=STAGES[n-1];
+function plainTurn(pass){
+  const n=cur.stage;
   if(pass){
-    const first=!S.done[n].includes(i);if(first){S.done[n].push(i)}
-    const left=Math.max(0,st.need-S.done[n].length);
-    $('#res').insertAdjacentHTML('beforeend',`<div class="card"><b>Passed.</b> ${left?left+' more pass'+(left>1?'es':'')+' to unlock the rally.':'Rally unlocked!'}<div class="row" style="margin-top:10px"><button class="btn" id="nx">Next text</button><button class="btn ghost" id="bk">Stage menu</button></div></div>`);
-    $('#nx').onclick=()=>play(n,nextIdx(n,i));$('#bk').onclick=()=>stageMenu(n);
+    const left=Math.max(0,NEED-passedOf(n).length);
+    $('#res').insertAdjacentHTML('beforeend',`<div class="card"><b>Passed.</b> ${P.rally[n]?'':left?left+' more pass'+(left>1?'es':'')+' to unlock the rally.':'Rally unlocked!'}<div class="row" style="margin-top:10px"><button class="btn" id="nx">Next drill</button><button class="btn ghost" id="fr">Fresh text</button><button class="btn ghost" id="bk">Stage</button></div></div>`);
+    $('#nx').onclick=()=>{cur=null;go('#home')};$('#fr').onclick=()=>playGen(n);$('#bk').onclick=()=>{cur=null;go('#stage/'+n)};
     foot.hidden=true;
   }else{
     $('#res').insertAdjacentHTML('beforeend',`<div class="note">Retry the same text. ${HINTS[n]}</div>`);
@@ -206,27 +353,39 @@ async function plainTurn(pass){
   }
   main.scrollTop=main.scrollHeight;
 }
-function nextIdx(n,i){const st=STAGES[n-1];for(let k=1;k<=st.sc.length;k++){const j=(i+k)%st.sc.length;if(!S.done[n].includes(j))return j}return (i+1)%st.sc.length}
-async function bossTurn(pass){
-  cur.turn++;if(pass)cur.passes++;else cur.fails++;
-  const n=cur.stage;
-  if(cur.fails>=2||cur.turn>=4||cur.passes>=3){
-    const win=cur.passes>=3||(cur.turn>=4&&cur.fails<2&&cur.passes>=2);
-    if(win){S.boss[n]=true;S.xp+=40}
-    foot.hidden=true;
-    $('#res').insertAdjacentHTML('beforeend',`<div class="card"><b>${win?'Rally won. '+(n<3?'Next stage unlocked.':'You finished the course.'):'Rally lost.'}</b> ${cur.passes} pass${cur.passes==1?'':'es'}, ${cur.fails} miss${cur.fails==1?'':'es'}.<div class="row" style="margin-top:10px">${win?'':'<button class="btn" id="rt">Try again</button>'}<button class="btn ghost" id="bk">Stage menu</button></div></div>`);
-    if(!win)$('#rt').onclick=()=>rally(n);$('#bk').onclick=()=>n<3&&win?menu():stageMenu(n);
+async function bossTurn(verdict){
+  cur.v.push(verdict);const n=cur.stage,r=rallyScore(cur.v);
+  if(r.over){
+    foot.hidden=true;let win=r.win;
+    if(TOKEN){try{const j=await api('/rally_result',{stage:n,rally_id:cur.rid});P=j.progress;win=j.win}catch(e){}}
+    else if(win&&passedOf(n).length>=NEED&&!P.rally[n]){P.rally[n]=true;P.xp+=40;saveGuest()}
+    hud();
+    $('#res').insertAdjacentHTML('beforeend',`<div class="card"><b>${win?'Rally won. '+(n<3?'Stage '+(n+1)+' unlocked.':'You finished the course.'):'Rally lost.'}</b> ${r.ps} pass${r.ps==1?'':'es'}, ${r.fs} miss${r.fs==1?'':'es'}.<div class="row" style="margin-top:10px">${win?'':'<button class="btn" id="rt">Try again</button>'}<button class="btn ghost" id="bk">Home</button></div></div>`);
+    if(!win)$('#rt').onclick=()=>rally(n);$('#bk').onclick=()=>{cur=null;go('#home')};
     return;
   }
   const ty=bubble('them','…','typing');
-  try{const r=await post('/reply',{thread:cur.thread});ty.remove();cur.thread.push({who:'them',t:r.text});bubble('them',r.text)}
+  try{const j=await api('/reply',{thread:cur.thread});ty.remove();cur.thread.push({who:'them',t:j.text});bubble('them',j.text)}
   catch(e){ty.remove();bubble('them','(lost signal)')}
-  $('#res').insertAdjacentHTML('beforeend',`<div class="note">Turn ${cur.turn}/4 · ${cur.passes} pass, ${cur.fails} miss. Keep the bit going, don't retreat to questions.</div>`);
+  $('#res').insertAdjacentHTML('beforeend',`<div class="note">Turn ${cur.v.length}/4 · ${r.ps} pass, ${r.fs} miss. Keep the bit going, don't retreat to questions.</div>`);
 }
 
 send.onclick=submit;
 inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit()}});
-menu();
+$('#who').onclick=()=>go('#stats');
+
+/* ---------- boot ---------- */
+(async()=>{
+  if(TOKEN){
+    main.innerHTML='<p class="note">Loading your profile…</p>';
+    try{await refresh();}catch(e){
+      if(TOKEN){P=null;main.innerHTML=`<div class="card err">Couldn't reach the coach (${esc(e.message)}).</div><div class="row"><button class="btn" id="rty">Retry</button><button class="btn ghost" id="gst">Play as guest</button></div>`;
+        $('#rty').onclick=()=>location.reload();$('#gst').onclick=()=>{TOKEN=null;ls.del('bc_token');loadGuest();go('#home');route()};return}
+    }
+  }else if(ls.get('bc_guest')){loadGuest()}
+  if(location.hash==='#play')history.replaceState(null,'','#home');
+  route();
+})();
 </script>
 </body>
 </html>
